@@ -28,6 +28,13 @@ export function getPrisma(): PrismaClient {
   return globalForPrisma.prisma;
 }
 
+/**
+ * Convert a number array to PGVector format string: [0.1,0.2,0.3,...]
+ */
+function toVectorString(embedding: number[]): string {
+  return `[${embedding.join(",")}]`;
+}
+
 export async function initializeDatabase(): Promise<void> {
   const db = getPrisma();
   
@@ -52,10 +59,13 @@ export async function storeDocument(
 ): Promise<number> {
   const db = getPrisma();
   
+  // Convert embedding array to PGVector format string
+  const vectorString = toVectorString(embedding);
+  
   // Use raw query to handle vector type
   const result = await db.$queryRaw<{ id: number }[]>`
     INSERT INTO documents (content, embedding, metadata)
-    VALUES (${content}, ${embedding}::vector, ${JSON.stringify(metadata)}::jsonb)
+    VALUES (${content}, ${vectorString}::vector, ${JSON.stringify(metadata)}::jsonb)
     RETURNING id
   `;
 
@@ -68,14 +78,17 @@ export async function searchSimilarDocuments(
 ): Promise<Array<{ id: number; content: string; score: number; metadata: Record<string, unknown> }>> {
   const db = getPrisma();
   
+  // Convert embedding array to PGVector format string
+  const vectorString = toVectorString(embedding);
+  
   const results = await db.$queryRaw<
     Array<{ id: number; content: string; score: number; metadata: Record<string, unknown> }>
   >`
     SELECT id, content, metadata,
-           1 - (embedding <=> ${embedding}::vector) as score
+           1 - (embedding <=> ${vectorString}::vector) as score
     FROM documents
     WHERE embedding IS NOT NULL
-    ORDER BY embedding <=> ${embedding}::vector
+    ORDER BY embedding <=> ${vectorString}::vector
     LIMIT ${limit}
   `;
 
