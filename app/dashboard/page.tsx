@@ -6,6 +6,7 @@ import FlashcardViewer from "@/app/components/FlashcardViewer";
 import QuizViewer from "@/app/components/QuizViewer";
 import ChatHistory from "@/app/components/ChatHistory";
 import DocumentList from "@/app/components/DocumentList";
+import { ToastContainer, useToast } from "@/app/components/Toast";
 
 // TypeScript declarations for Web Speech API
 interface SpeechRecognition extends EventTarget {
@@ -137,6 +138,7 @@ export default function Dashboard() {
   const [isHandsFreeModeEnabled, setIsHandsFreeModeEnabled] = useState(false);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const speechSynthesisRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const { messages: toastMessages, showToast, closeToast } = useToast();
 
   const addLog = (message: string) => {
     const timestamp = new Date().toLocaleTimeString();
@@ -146,13 +148,7 @@ export default function Dashboard() {
   // Initialize speech recognition
   useEffect(() => {
     if (typeof window !== 'undefined' && ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
-      const SpeechRecognition = (window as typeof window & {
-        SpeechRecognition?: typeof window.SpeechRecognition;
-        webkitSpeechRecognition?: typeof window.SpeechRecognition;
-      }).SpeechRecognition || (window as typeof window & {
-        SpeechRecognition?: typeof window.SpeechRecognition;
-        webkitSpeechRecognition?: typeof window.SpeechRecognition;
-      }).webkitSpeechRecognition;
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
       if (SpeechRecognition) {
         const recognition = new SpeechRecognition();
@@ -180,10 +176,12 @@ export default function Dashboard() {
       }
     }
 
-    // Load hands-free mode preference
-    const savedHandsFreeModePreference = localStorage.getItem('handsFreeModeEnabled');
-    if (savedHandsFreeModePreference !== null) {
-      setIsHandsFreeModeEnabled(savedHandsFreeModePreference === 'true');
+    // Load hands-free mode preference from localStorage (client-side only)
+    if (typeof window !== 'undefined') {
+      const savedHandsFreeModePreference = localStorage.getItem('handsFreeModeEnabled');
+      if (savedHandsFreeModePreference !== null) {
+        setIsHandsFreeModeEnabled(savedHandsFreeModePreference === 'true');
+      }
     }
 
     // Cleanup
@@ -191,7 +189,7 @@ export default function Dashboard() {
       if (recognitionRef.current) {
         recognitionRef.current.stop();
       }
-      if (speechSynthesisRef.current) {
+      if (typeof window !== 'undefined') {
         window.speechSynthesis.cancel();
       }
     };
@@ -372,6 +370,7 @@ export default function Dashboard() {
         addLog(`Query successful: ${data.sources?.length || 0} sources found`);
         
         // Auto-read answer in hands-free mode
+        // Small delay to ensure the UI updates before starting speech
         if (isHandsFreeModeEnabled && data.answer) {
           setTimeout(() => {
             readAloud(data.answer);
@@ -398,7 +397,7 @@ export default function Dashboard() {
 
   const toggleVoiceInput = () => {
     if (!recognitionRef.current) {
-      alert('Speech recognition is not supported in your browser. Please use Chrome, Edge, or Safari.');
+      showToast('Speech recognition is not supported in your browser. Please use Chrome, Edge, or Safari.', 'error');
       return;
     }
 
@@ -414,6 +413,7 @@ export default function Dashboard() {
       } catch (error) {
         console.error('Error starting speech recognition:', error);
         addLog('Failed to start voice input');
+        showToast('Failed to start voice input. Please try again.', 'error');
       }
     }
   };
@@ -463,6 +463,9 @@ export default function Dashboard() {
 
   return (
     <div className="flex h-screen bg-background">
+      {/* Toast notifications */}
+      <ToastContainer messages={toastMessages} onClose={closeToast} />
+      
       {/* Main content */}
       <main className="flex-1 overflow-y-auto">
         <div className="max-w-4xl mx-auto p-8">
