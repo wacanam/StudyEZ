@@ -28,8 +28,6 @@ export function getPrisma(): PrismaClient {
   return globalForPrisma.prisma;
 }
 
-export const prisma = getPrisma();
-
 export async function initializeDatabase(): Promise<void> {
   const db = getPrisma();
   

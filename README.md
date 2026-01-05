@@ -1,7 +1,7 @@
 # StudyEZ
 
 <p align="center">
-  <img src="public/logo.svg" alt="StudyEZ Logo" width="200" />
+  <img src="public/logo.png" alt="StudyEZ Logo" width="200" />
 </p>
 
 <p align="center">
@@ -15,7 +15,7 @@
 - **Vector Database**: [PGVector](https://github.com/pgvector/pgvector) (PostgreSQL)
 - **LLM**: [Gemini 2.5 Flash](https://ai.google.dev/)
 - **ORM**: [Prisma 7](https://www.prisma.io/)
-- **Styling**: [Tailwind CSS](https://tailwindcss.com/) with Inter font
+- **Styling**: [Tailwind CSS](https://tailwindcss.com/) with Inter font (via `next/font`)
 
 ## Features
 
@@ -75,7 +75,7 @@
 
 ## UI Design
 
-- **Font**: Inter
+- **Font**: Inter (via Next.js font optimization)
 - **Color Palette**:
   - Background: `#FAF3E1`
   - Surface: `#F5E7C6`
@@ -100,16 +100,17 @@
 │   ├── api/
 │   │   ├── query/route.ts    # RAG query endpoint
 │   │   └── upload/route.ts   # Document upload endpoint
+│   ├── dashboard/page.tsx    # Main app (upload + query)
 │   ├── globals.css           # Global styles
-│   ├── layout.tsx            # Root layout
-│   └── page.tsx              # Landing page
+│   ├── layout.tsx            # Root layout with Inter font
+│   └── page.tsx              # Landing page with CTA
 ├── lib/
 │   ├── db.ts                 # Database utilities (Prisma)
 │   └── rag.ts                # RAG utilities (Gemini)
 ├── prisma/
 │   └── schema.prisma         # Database schema
 ├── public/
-│   └── logo.svg              # StudyEZ logo
+│   └── logo.png              # StudyEZ logo
 └── prisma.config.ts          # Prisma configuration
 ```
 
