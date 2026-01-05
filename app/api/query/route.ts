@@ -48,11 +48,19 @@ export async function POST(request: NextRequest) {
       3
     );
 
-    // Get the re-ranked documents in order
-    const topDocs = reranked.map(r => ({
+    // Get the re-ranked documents in order, with fallback to original candidates
+    let topDocs = reranked.map(r => ({
       ...candidateDocs[r.index],
       relevanceScore: r.relevanceScore,
     }));
+
+    // Safety check: if re-ranking failed to return results, fall back to original candidates
+    if (topDocs.length === 0) {
+      topDocs = candidateDocs.slice(0, 3).map(doc => ({
+        ...doc,
+        relevanceScore: Math.min(doc.score * 100, 100),
+      }));
+    }
 
     // Extract context from top documents
     const context = topDocs.map((doc) => doc.content);
@@ -61,7 +69,9 @@ export async function POST(request: NextRequest) {
     const answer = await generateResponse(query, context);
 
     // Calculate confidence score based on re-ranking scores (average of top 3)
-    const avgRelevance = topDocs.reduce((sum, doc) => sum + doc.relevanceScore, 0) / topDocs.length;
+    const avgRelevance = topDocs.length > 0 
+      ? topDocs.reduce((sum, doc) => sum + doc.relevanceScore, 0) / topDocs.length 
+      : 0;
     const confidenceScore = Math.round(avgRelevance);
 
     // Prepare sources for response

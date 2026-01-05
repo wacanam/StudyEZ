@@ -117,7 +117,7 @@ Important: Return ONLY the JSON array, no other text or explanation.`;
     console.error("Failed to parse re-ranking response:", error, "Response:", responseText);
     // Fallback: return top K based on original scores
     return documents
-      .map((_, idx) => ({ index: idx, relevanceScore: documents[idx].score * 100 }))
+      .map((_, idx) => ({ index: idx, relevanceScore: Math.min(documents[idx].score * 100, 100) }))
       .slice(0, topK);
   }
 }
