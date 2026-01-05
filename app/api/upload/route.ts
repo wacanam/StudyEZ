@@ -4,6 +4,10 @@ import { initializeDatabase, storeDocument } from "@/lib/db";
 import { generateEmbedding, chunkText } from "@/lib/rag";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
+// Constants for visual extraction
+const NO_VISUALS_MARKER = "NO_VISUALS_FOUND";
+const VISUAL_SEPARATOR = "---";
+
 // Initialize Gemini client
 function getGenAI(): GoogleGenerativeAI {
   const apiKey = process.env.GOOGLE_API_KEY;
@@ -57,11 +61,13 @@ export async function POST(request: NextRequest) {
         if (visualDescriptions && visualDescriptions.length > 0) {
           console.log(`Found ${visualDescriptions.length} visual elements in ${fileName}`);
           
+          // Generate embeddings for all visual descriptions concurrently
+          const embeddingPromises = visualDescriptions.map(desc => generateEmbedding(desc));
+          const embeddings = await Promise.all(embeddingPromises);
+          
+          // Store visual descriptions with their embeddings
           for (let i = 0; i < visualDescriptions.length; i++) {
-            const visualDesc = visualDescriptions[i];
-            const embedding = await generateEmbedding(visualDesc);
-            
-            await storeDocument(visualDesc, embedding, userId, {
+            await storeDocument(visualDescriptions[i], embeddings[i], userId, {
               fileName,
               chunkType: "visual",
               visualIndex: i,
@@ -167,9 +173,9 @@ For EACH visual element you find, provide a detailed description in the followin
 [VISUAL: Type of visual (e.g., diagram, chart, table, graph, image)]
 Description: [Detailed description of the visual element, including key data points, labels, trends, or important information it conveys]
 Context: [Any surrounding text or captions that provide context for this visual]
----
+${VISUAL_SEPARATOR}
 
-If there are NO visual elements in the document, respond with exactly: "NO_VISUALS_FOUND"
+If there are NO visual elements in the document, respond with exactly: "${NO_VISUALS_MARKER}"
 
 Focus on visual content that contains important information for studying, such as:
 - Diagrams showing processes or relationships
@@ -186,9 +192,12 @@ Provide clear, detailed descriptions that would help someone understand the visu
   
   // Parse visual descriptions
   const visualDescriptions: string[] = [];
-  if (visualResponse !== "NO_VISUALS_FOUND" && visualResponse.length > 0) {
+  if (visualResponse !== NO_VISUALS_MARKER && visualResponse.length > 0) {
     // Split by the separator and filter empty entries
-    const descriptions = visualResponse.split("---").map(d => d.trim()).filter(d => d.length > 0);
+    const descriptions = visualResponse
+      .split(VISUAL_SEPARATOR)
+      .map(d => d.trim())
+      .filter(d => d.length > 0 && d !== NO_VISUALS_MARKER);
     visualDescriptions.push(...descriptions);
   }
   
