@@ -12,6 +12,8 @@ interface QueryResponse {
   sources: Array<{
     text: string;
     score: number;
+    metadata?: Record<string, unknown>;
+    isVisual?: boolean;
   }>;
   sessionId?: number;
 }
@@ -50,6 +52,7 @@ interface ChatMessage {
     text: string;
     score: number;
     metadata?: Record<string, unknown>;
+    isVisual?: boolean;
   }>;
   createdAt: string;
 }
@@ -530,6 +533,11 @@ export default function Dashboard() {
                       key={index}
                       className="p-3 bg-background rounded-lg border border-ink/10"
                     >
+                      {source.isVisual && (
+                        <div className="mb-2 inline-flex items-center gap-1 px-2 py-1 bg-accent/10 text-accent text-xs font-semibold rounded">
+                          🖼️ Visual Description
+                        </div>
+                      )}
                       <p className="text-sm text-ink/80">{source.text}</p>
                       <p className="text-xs text-ink/50 mt-1">
                         Relevance: {(source.score * 100).toFixed(1)}%
