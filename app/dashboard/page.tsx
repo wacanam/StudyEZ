@@ -1,11 +1,61 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import FlashcardViewer from "@/app/components/FlashcardViewer";
 import QuizViewer from "@/app/components/QuizViewer";
 import ChatHistory from "@/app/components/ChatHistory";
 import DocumentList from "@/app/components/DocumentList";
+
+// TypeScript declarations for Web Speech API
+interface SpeechRecognition extends EventTarget {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  start(): void;
+  stop(): void;
+  onresult: ((event: SpeechRecognitionEvent) => void) | null;
+  onerror: ((event: SpeechRecognitionErrorEvent) => void) | null;
+  onend: (() => void) | null;
+}
+
+interface SpeechRecognitionEvent extends Event {
+  results: SpeechRecognitionResultList;
+}
+
+interface SpeechRecognitionResultList {
+  length: number;
+  item(index: number): SpeechRecognitionResult;
+  [index: number]: SpeechRecognitionResult;
+}
+
+interface SpeechRecognitionResult {
+  length: number;
+  item(index: number): SpeechRecognitionAlternative;
+  [index: number]: SpeechRecognitionAlternative;
+  isFinal: boolean;
+}
+
+interface SpeechRecognitionAlternative {
+  transcript: string;
+  confidence: number;
+}
+
+interface SpeechRecognitionErrorEvent extends Event {
+  error: string;
+  message: string;
+}
+
+declare global {
+  interface Window {
+    SpeechRecognition: {
+      new(): SpeechRecognition;
+    };
+    webkitSpeechRecognition: {
+      new(): SpeechRecognition;
+    };
+  }
+}
 
 interface QueryResponse {
   answer: string;
@@ -82,11 +132,70 @@ export default function Dashboard() {
   const [currentSessionId, setCurrentSessionId] = useState<number | null>(null);
   const [selectedSession, setSelectedSession] = useState<ChatSession | null>(null);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [isListening, setIsListening] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [isHandsFreeModeEnabled, setIsHandsFreeModeEnabled] = useState(false);
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const speechSynthesisRef = useRef<SpeechSynthesisUtterance | null>(null);
 
   const addLog = (message: string) => {
     const timestamp = new Date().toLocaleTimeString();
     setLogs((prev) => [...prev, `[${timestamp}] ${message}`]);
   };
+
+  // Initialize speech recognition
+  useEffect(() => {
+    if (typeof window !== 'undefined' && ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
+      const SpeechRecognition = (window as typeof window & {
+        SpeechRecognition?: typeof window.SpeechRecognition;
+        webkitSpeechRecognition?: typeof window.SpeechRecognition;
+      }).SpeechRecognition || (window as typeof window & {
+        SpeechRecognition?: typeof window.SpeechRecognition;
+        webkitSpeechRecognition?: typeof window.SpeechRecognition;
+      }).webkitSpeechRecognition;
+
+      if (SpeechRecognition) {
+        const recognition = new SpeechRecognition();
+        recognition.continuous = false;
+        recognition.interimResults = false;
+        recognition.lang = 'en-US';
+
+        recognition.onresult = (event) => {
+          const transcript = event.results[0][0].transcript;
+          setQuery(transcript);
+          addLog(`Voice input: "${transcript}"`);
+        };
+
+        recognition.onerror = (event) => {
+          console.error('Speech recognition error:', event.error);
+          addLog(`Voice input error: ${event.error}`);
+          setIsListening(false);
+        };
+
+        recognition.onend = () => {
+          setIsListening(false);
+        };
+
+        recognitionRef.current = recognition;
+      }
+    }
+
+    // Load hands-free mode preference
+    const savedHandsFreeModePreference = localStorage.getItem('handsFreeModeEnabled');
+    if (savedHandsFreeModePreference !== null) {
+      setIsHandsFreeModeEnabled(savedHandsFreeModePreference === 'true');
+    }
+
+    // Cleanup
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
+      if (speechSynthesisRef.current) {
+        window.speechSynthesis.cancel();
+      }
+    };
+  }, []);
 
   // Load existing flashcards and quizzes on component mount
   useEffect(() => {
@@ -261,6 +370,13 @@ export default function Dashboard() {
         setResponse(data);
         setCurrentSessionId(data.sessionId);
         addLog(`Query successful: ${data.sources?.length || 0} sources found`);
+        
+        // Auto-read answer in hands-free mode
+        if (isHandsFreeModeEnabled && data.answer) {
+          setTimeout(() => {
+            readAloud(data.answer);
+          }, 500);
+        }
       } else {
         addLog(`Query error: ${data.error}`);
         setResponse({
@@ -278,6 +394,71 @@ export default function Dashboard() {
     }
 
     setIsQuerying(false);
+  };
+
+  const toggleVoiceInput = () => {
+    if (!recognitionRef.current) {
+      alert('Speech recognition is not supported in your browser. Please use Chrome, Edge, or Safari.');
+      return;
+    }
+
+    if (isListening) {
+      recognitionRef.current.stop();
+      setIsListening(false);
+      addLog('Voice input stopped');
+    } else {
+      try {
+        recognitionRef.current.start();
+        setIsListening(true);
+        addLog('Voice input started - speak now...');
+      } catch (error) {
+        console.error('Error starting speech recognition:', error);
+        addLog('Failed to start voice input');
+      }
+    }
+  };
+
+  const readAloud = (text: string) => {
+    // Stop any ongoing speech
+    window.speechSynthesis.cancel();
+
+    if (isSpeaking) {
+      setIsSpeaking(false);
+      addLog('Stopped reading aloud');
+      return;
+    }
+
+    // Create utterance
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'en-US';
+    utterance.rate = 1.0;
+    utterance.pitch = 1.0;
+
+    utterance.onstart = () => {
+      setIsSpeaking(true);
+      addLog('Reading answer aloud...');
+    };
+
+    utterance.onend = () => {
+      setIsSpeaking(false);
+      addLog('Finished reading aloud');
+    };
+
+    utterance.onerror = (event) => {
+      console.error('Speech synthesis error:', event);
+      setIsSpeaking(false);
+      addLog(`Text-to-speech error: ${event.error}`);
+    };
+
+    speechSynthesisRef.current = utterance;
+    window.speechSynthesis.speak(utterance);
+  };
+
+  const toggleHandsFreeMode = () => {
+    const newValue = !isHandsFreeModeEnabled;
+    setIsHandsFreeModeEnabled(newValue);
+    localStorage.setItem('handsFreeModeEnabled', String(newValue));
+    addLog(`Hands-Free Mode ${newValue ? 'enabled' : 'disabled'}`);
   };
 
   return (
@@ -453,14 +634,41 @@ export default function Dashboard() {
               <h2 className="text-xl font-semibold text-ink">
                 🔍 Ask a Question
               </h2>
-              {currentSessionId && (
+              <div className="flex items-center gap-3">
+                {/* Hands-Free Mode Toggle */}
                 <button
-                  onClick={handleNewChat}
-                  className="px-3 py-1 text-sm bg-accent/10 text-accent rounded-lg hover:bg-accent/20 transition-colors"
+                  onClick={toggleHandsFreeMode}
+                  className={`flex items-center gap-2 px-3 py-1 text-sm rounded-lg transition-colors ${
+                    isHandsFreeModeEnabled
+                      ? 'bg-accent text-white'
+                      : 'bg-accent/10 text-accent hover:bg-accent/20'
+                  }`}
+                  title="Auto-read answers aloud"
                 >
-                  + New Chat
+                  <svg
+                    className="w-4 h-4"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"
+                    />
+                  </svg>
+                  Hands-Free
                 </button>
-              )}
+                {currentSessionId && (
+                  <button
+                    onClick={handleNewChat}
+                    className="px-3 py-1 text-sm bg-accent/10 text-accent rounded-lg hover:bg-accent/20 transition-colors"
+                  >
+                    + New Chat
+                  </button>
+                )}
+              </div>
             </div>
             <form onSubmit={handleQuery} className="flex gap-3">
               <input
@@ -470,6 +678,30 @@ export default function Dashboard() {
                 placeholder="Enter your study question..."
                 className="flex-1 px-4 py-3 rounded-lg border border-ink/20 bg-background focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent text-ink placeholder:text-ink/40"
               />
+              <button
+                type="button"
+                onClick={toggleVoiceInput}
+                className={`px-4 py-3 rounded-lg font-semibold transition-colors ${
+                  isListening
+                    ? 'bg-red-500 text-white hover:bg-red-600 animate-pulse'
+                    : 'bg-accent/10 text-accent hover:bg-accent/20'
+                }`}
+                title={isListening ? "Stop listening" : "Voice input"}
+              >
+                <svg
+                  className="w-5 h-5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"
+                  />
+                </svg>
+              </button>
               <button
                 type="submit"
                 disabled={isQuerying || !query.trim()}
@@ -514,7 +746,59 @@ export default function Dashboard() {
         {/* Response Section */}
         {studyMode === "query" && response && (
           <section className="bg-surface rounded-xl p-6 mb-8 shadow-sm">
-            <h2 className="text-xl font-semibold text-ink mb-4">💡 Answer</h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-semibold text-ink">💡 Answer</h2>
+              <button
+                onClick={() => readAloud(response.answer)}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
+                  isSpeaking
+                    ? 'bg-red-500 text-white hover:bg-red-600'
+                    : 'bg-accent text-white hover:bg-accent/90'
+                }`}
+              >
+                {isSpeaking ? (
+                  <>
+                    <svg
+                      className="w-5 h-5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                      />
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M9 10h6v4H9z"
+                      />
+                    </svg>
+                    Stop Reading
+                  </>
+                ) : (
+                  <>
+                    <svg
+                      className="w-5 h-5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"
+                      />
+                    </svg>
+                    Read Aloud
+                  </>
+                )}
+              </button>
+            </div>
             <div className="prose prose-sm max-w-none">
               <p className="text-ink whitespace-pre-wrap">{response.answer}</p>
             </div>
