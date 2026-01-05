@@ -32,7 +32,7 @@ export async function generateEmbedding(text: string): Promise<number[]> {
 }
 
 /**
- * Generate a response using Gemini 2.5 Flash LLM
+ * Generate a response using Gemini 2.0 Flash LLM
  */
 export async function generateResponse(
   query: string,
