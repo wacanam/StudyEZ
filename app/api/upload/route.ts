@@ -1,6 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { initializeDatabase, storeDocument } from "@/lib/db";
 import { generateEmbedding, chunkText } from "@/lib/rag";
+import { GoogleGenerativeAI } from "@google/generative-ai";
+
+// Initialize Gemini client
+function getGenAI(): GoogleGenerativeAI {
+  const apiKey = process.env.GOOGLE_API_KEY;
+  if (!apiKey) {
+    throw new Error("GOOGLE_API_KEY environment variable is not set");
+  }
+  return new GoogleGenerativeAI(apiKey);
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -28,18 +38,20 @@ export async function POST(request: NextRequest) {
       let content: string;
       
       if (fileType === "application/pdf") {
-        // For MVP, we'll extract text from PDF using basic approach
-        // In production, use a proper PDF parser like pdf-parse
+        // Use Gemini to extract text from PDF
         const buffer = await file.arrayBuffer();
-        content = await extractTextFromPDF(buffer);
+        content = await extractTextWithGemini(buffer, fileType);
       } else {
-        // Text file
+        // Text file - read directly
         content = await file.text();
       }
 
       if (!content.trim()) {
+        console.log(`No content extracted from file: ${fileName}`);
         continue;
       }
+
+      console.log(`Extracted ${content.length} characters from ${fileName}`);
 
       // Chunk the content
       const chunks = await chunkText(content);
@@ -76,43 +88,37 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// Basic PDF text extraction for MVP
-// This is a stub - in production, use a proper PDF parser
-async function extractTextFromPDF(buffer: ArrayBuffer): Promise<string> {
-  // Convert ArrayBuffer to string and try to extract readable text
-  const uint8Array = new Uint8Array(buffer);
-  let text = "";
+/**
+ * Use Gemini's vision capabilities to extract text from PDF files
+ */
+async function extractTextWithGemini(buffer: ArrayBuffer, mimeType: string): Promise<string> {
+  const genAI = getGenAI();
   
-  // Simple extraction - look for text between stream and endstream
-  const decoder = new TextDecoder("utf-8", { fatal: false });
-  const pdfString = decoder.decode(uint8Array);
+  // Use Gemini 2.0 Flash which supports document understanding
+  const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
   
-  // Extract text objects (very basic, works for simple PDFs)
-  const textMatches = pdfString.match(/\(([^)]+)\)/g);
-  if (textMatches) {
-    text = textMatches
-      .map((match) => match.slice(1, -1))
-      .filter((t) => t.length > 2 && /[a-zA-Z]/.test(t))
-      .join(" ");
-  }
+  // Convert ArrayBuffer to base64
+  const base64Data = Buffer.from(buffer).toString("base64");
+  
+  // Create the request with inline data (PDF)
+  const result = await model.generateContent([
+    {
+      inlineData: {
+        mimeType: mimeType,
+        data: base64Data,
+      },
+    },
+    {
+      text: `Extract ALL the text content from this PDF document. 
+Return ONLY the extracted text content, preserving the original structure and formatting as much as possible.
+Do not add any commentary, summaries, or explanations - just the raw text from the document.
+If there are multiple pages, include all content from all pages.
+If there are headers, paragraphs, lists, or other structural elements, preserve them.`,
+    },
+  ]);
 
-  // If no text found through parentheses, try to get any readable ASCII
-  if (!text.trim()) {
-    const readableChars: string[] = [];
-    for (let i = 0; i < uint8Array.length; i++) {
-      const char = uint8Array[i];
-      if ((char >= 32 && char <= 126) || char === 10 || char === 13) {
-        readableChars.push(String.fromCharCode(char));
-      }
-    }
-    text = readableChars.join("");
-  }
-
-  // Clean up the text
-  text = text
-    .replace(/[^\x20-\x7E\n\r]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-
-  return text;
+  const response = result.response;
+  const extractedText = response.text();
+  
+  return extractedText.trim();
 }
