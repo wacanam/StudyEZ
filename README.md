@@ -11,6 +11,7 @@
 ## Tech Stack
 
 - **Framework**: [Next.js 16](https://nextjs.org/) with App Router
+- **Authentication**: [Clerk](https://clerk.com) for user management and authentication
 - **RAG Framework**: [LlamaIndex](https://www.llamaindex.ai/) for document chunking, indexing, and retrieval
 - **Vector Database**: [PGVector](https://github.com/pgvector/pgvector) (PostgreSQL)
 - **LLM**: [Gemini 2.5 Flash](https://ai.google.dev/) via Google Generative AI SDK
@@ -19,10 +20,12 @@
 
 ## Features
 
-- 📚 **Document Upload**: Upload PDF or TXT study materials
+- 🔐 **User Authentication**: Secure sign-in with [Clerk](https://clerk.com)
+- 📚 **Document Upload**: Upload PDF or TXT study materials (private to your account)
 - 🔍 **RAG Queries**: Ask questions and get AI-powered answers from your materials  
 - 📄 **Source References**: View relevant source snippets with relevance scores
 - 📋 **Activity Log**: Track upload and query activity in real-time
+- 🔒 **Private Libraries**: Each user has their own isolated document library
 
 ## LlamaIndex Integration
 
@@ -67,6 +70,8 @@ Combined with **Gemini** for:
    Required variables:
    - `GOOGLE_API_KEY`: Your Google AI API key for Gemini
    - `DATABASE_URL`: PostgreSQL connection string with PGVector
+   - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`: Your Clerk publishable key (get from [Clerk Dashboard](https://dashboard.clerk.com))
+   - `CLERK_SECRET_KEY`: Your Clerk secret key (get from [Clerk Dashboard](https://dashboard.clerk.com))
 
    > **Note**: If your database password contains `@`, URL-encode it as `%40`.
    > Example: `postgresql://user:p%40ssword@host:5432/db`
