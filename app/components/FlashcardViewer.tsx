@@ -54,15 +54,13 @@ export default function FlashcardViewer({ flashcards }: FlashcardViewerProps) {
         style={{ perspective: "1000px" }}
       >
         <div
-          className={`relative w-full h-full transition-transform duration-500 ${
+          className={`relative w-full h-full transition-transform duration-500 preserve-3d ${
             isFlipped ? "rotate-y-180" : ""
           }`}
-          style={{ transformStyle: "preserve-3d" }}
         >
           {/* Front of card */}
           <div
             className="absolute w-full h-full backface-hidden bg-accent text-white rounded-xl p-8 flex items-center justify-center text-center shadow-lg"
-            style={{ backfaceVisibility: "hidden" }}
           >
             <div>
               <p className="text-sm opacity-75 mb-4">Question</p>
@@ -73,10 +71,7 @@ export default function FlashcardViewer({ flashcards }: FlashcardViewerProps) {
           {/* Back of card */}
           <div
             className="absolute w-full h-full backface-hidden bg-surface border-2 border-accent rounded-xl p-8 flex items-center justify-center text-center shadow-lg"
-            style={{
-              backfaceVisibility: "hidden",
-              transform: "rotateY(180deg)",
-            }}
+            style={{ transform: "rotateY(180deg)" }}
           >
             <div>
               <p className="text-sm text-ink/60 mb-4">Answer</p>
