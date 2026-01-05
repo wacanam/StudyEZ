@@ -5,7 +5,7 @@ import { getPrisma } from "@/lib/db";
 // DELETE /api/upload/[fileName] - Delete all chunks of a file
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { fileName: string } }
+  { params }: { params: Promise<{ fileName: string }> }
 ) {
   try {
     // Get the authenticated user's ID
@@ -17,7 +17,8 @@ export async function DELETE(
       );
     }
 
-    const fileName = decodeURIComponent(params.fileName);
+    const { fileName: encodedFileName } = await params;
+    const fileName = decodeURIComponent(encodedFileName);
     const db = getPrisma();
 
     // Delete all document chunks with this fileName in metadata
@@ -52,7 +53,7 @@ export async function DELETE(
 // PATCH /api/upload/[fileName] - Rename a file
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { fileName: string } }
+  { params }: { params: Promise<{ fileName: string }> }
 ) {
   try {
     // Get the authenticated user's ID
@@ -64,7 +65,8 @@ export async function PATCH(
       );
     }
 
-    const oldFileName = decodeURIComponent(params.fileName);
+    const { fileName: encodedFileName } = await params;
+    const oldFileName = decodeURIComponent(encodedFileName);
     const body = await request.json();
     const { newFileName } = body;
 
