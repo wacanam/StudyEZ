@@ -5,6 +5,7 @@ import Link from "next/link";
 import FlashcardViewer from "@/app/components/FlashcardViewer";
 import QuizViewer from "@/app/components/QuizViewer";
 import ChatHistory from "@/app/components/ChatHistory";
+import DocumentList from "@/app/components/DocumentList";
 
 interface QueryResponse {
   answer: string;
@@ -61,7 +62,7 @@ interface ChatSession {
   messages: ChatMessage[];
 }
 
-type StudyMode = "query" | "flashcards" | "quiz";
+type StudyMode = "query" | "flashcards" | "quiz" | "documents";
 
 export default function Dashboard() {
   const [query, setQuery] = useState("");
@@ -398,6 +399,16 @@ export default function Dashboard() {
             >
               📝 Quiz Mode
             </button>
+            <button
+              onClick={() => setStudyMode("documents")}
+              className={`flex-1 px-4 py-3 rounded-lg font-medium transition-colors ${
+                studyMode === "documents"
+                  ? "bg-accent text-white"
+                  : "bg-background text-ink border border-ink/20 hover:border-accent/50"
+              }`}
+            >
+              📚 Documents
+            </button>
           </div>
 
           {/* Generate Study Tools */}
@@ -489,6 +500,17 @@ export default function Dashboard() {
             <QuizViewer quizzes={quizzes} />
           </section>
         )}
+
+        {/* Document List - shown when in documents mode */}
+        {studyMode === "documents" && (
+          <section className="bg-surface rounded-xl p-6 mb-8 shadow-sm">
+            <h2 className="text-xl font-semibold text-ink mb-6">
+              📚 Manage Documents
+            </h2>
+            <DocumentList onUpdate={() => addLog("Document list updated")} />
+          </section>
+        )}
+
         {/* Response Section */}
         {studyMode === "query" && response && (
           <section className="bg-surface rounded-xl p-6 mb-8 shadow-sm">
