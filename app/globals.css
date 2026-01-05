@@ -32,3 +32,16 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: #e55a0d;
 }
+
+/* Flashcard flip animation */
+.preserve-3d {
+  transform-style: preserve-3d;
+}
+
+.backface-hidden {
+  backface-visibility: hidden;
+}
+
+.rotate-y-180 {
+  transform: rotateY(180deg);
+}

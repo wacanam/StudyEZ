@@ -1,7 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
+import FlashcardViewer from "@/app/components/FlashcardViewer";
+import QuizViewer from "@/app/components/QuizViewer";
 
 interface QueryResponse {
   answer: string;
@@ -17,6 +19,28 @@ interface UploadStatus {
   documentsCount?: number;
 }
 
+interface Flashcard {
+  id: number;
+  question: string;
+  answer: string;
+  userId: string;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+}
+
+interface Quiz {
+  id: number;
+  question: string;
+  options: string[];
+  correctAnswer: string;
+  explanation?: string;
+  userId: string;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+}
+
+type StudyMode = "query" | "flashcards" | "quiz";
+
 export default function Dashboard() {
   const [query, setQuery] = useState("");
   const [response, setResponse] = useState<QueryResponse | null>(null);
@@ -26,10 +50,77 @@ export default function Dashboard() {
     message: "",
   });
   const [logs, setLogs] = useState<string[]>([]);
+  const [studyMode, setStudyMode] = useState<StudyMode>("query");
+  const [studyTopic, setStudyTopic] = useState("");
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [flashcards, setFlashcards] = useState<Flashcard[]>([]);
+  const [quizzes, setQuizzes] = useState<Quiz[]>([]);
+  const [generationStatus, setGenerationStatus] = useState("");
 
   const addLog = (message: string) => {
     const timestamp = new Date().toLocaleTimeString();
     setLogs((prev) => [...prev, `[${timestamp}] ${message}`]);
+  };
+
+  // Load existing flashcards and quizzes on component mount
+  useEffect(() => {
+    loadStudyTools();
+  }, []);
+
+  const loadStudyTools = async () => {
+    try {
+      const res = await fetch("/api/generate-tools");
+      if (res.ok) {
+        const data = await res.json();
+        setFlashcards(data.flashcards || []);
+        setQuizzes(data.quizzes || []);
+        addLog(`Loaded ${data.flashcards?.length || 0} flashcards and ${data.quizzes?.length || 0} quizzes`);
+      }
+    } catch (error) {
+      console.error("Failed to load study tools:", error);
+    }
+  };
+
+  const handleGenerateTools = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!studyTopic.trim()) return;
+
+    setIsGenerating(true);
+    setGenerationStatus("Generating study tools...");
+    addLog(`Generating tools for topic: "${studyTopic}"`);
+
+    try {
+      const res = await fetch("/api/generate-tools", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ topic: studyTopic }),
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        setGenerationStatus("Successfully generated study tools!");
+        addLog(`Generated ${data.flashcards?.length || 0} flashcards and ${data.quizzes?.length || 0} quiz questions`);
+        // Reload the study tools
+        await loadStudyTools();
+        // Switch to the appropriate mode
+        if (studyMode === "query") {
+          setStudyMode("flashcards");
+        }
+      } else {
+        setGenerationStatus(`Error: ${data.error}`);
+        addLog(`Generation error: ${data.error}`);
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Unknown error";
+      setGenerationStatus(`Error: ${errorMessage}`);
+      addLog(`Generation exception: ${errorMessage}`);
+    }
+
+    setIsGenerating(false);
+    setTimeout(() => setGenerationStatus(""), 5000);
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -202,31 +293,125 @@ export default function Dashboard() {
           </div>
         </section>
 
-        {/* Query Section */}
+        {/* Study Mode Selector */}
         <section className="bg-surface rounded-xl p-6 mb-8 shadow-sm">
           <h2 className="text-xl font-semibold text-ink mb-4">
-            🔍 Ask a Question
+            🎯 Study Mode
           </h2>
-          <form onSubmit={handleQuery} className="flex gap-3">
-            <input
-              type="text"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Enter your study question..."
-              className="flex-1 px-4 py-3 rounded-lg border border-ink/20 bg-background focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent text-ink placeholder:text-ink/40"
-            />
+          <div className="flex gap-3 mb-6">
             <button
-              type="submit"
-              disabled={isQuerying || !query.trim()}
-              className="px-6 py-3 bg-accent text-white font-semibold rounded-lg hover:bg-accent/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              onClick={() => setStudyMode("query")}
+              className={`flex-1 px-4 py-3 rounded-lg font-medium transition-colors ${
+                studyMode === "query"
+                  ? "bg-accent text-white"
+                  : "bg-background text-ink border border-ink/20 hover:border-accent/50"
+              }`}
             >
-              {isQuerying ? "Querying..." : "Ask"}
+              🔍 Q&A Mode
             </button>
-          </form>
+            <button
+              onClick={() => setStudyMode("flashcards")}
+              className={`flex-1 px-4 py-3 rounded-lg font-medium transition-colors ${
+                studyMode === "flashcards"
+                  ? "bg-accent text-white"
+                  : "bg-background text-ink border border-ink/20 hover:border-accent/50"
+              }`}
+            >
+              🗂️ Flashcards
+            </button>
+            <button
+              onClick={() => setStudyMode("quiz")}
+              className={`flex-1 px-4 py-3 rounded-lg font-medium transition-colors ${
+                studyMode === "quiz"
+                  ? "bg-accent text-white"
+                  : "bg-background text-ink border border-ink/20 hover:border-accent/50"
+              }`}
+            >
+              📝 Quiz Mode
+            </button>
+          </div>
+
+          {/* Generate Study Tools */}
+          {(studyMode === "flashcards" || studyMode === "quiz") && (
+            <div className="space-y-4">
+              <form onSubmit={handleGenerateTools} className="flex gap-3">
+                <input
+                  type="text"
+                  value={studyTopic}
+                  onChange={(e) => setStudyTopic(e.target.value)}
+                  placeholder="Enter a topic to generate study tools..."
+                  className="flex-1 px-4 py-3 rounded-lg border border-ink/20 bg-background focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent text-ink placeholder:text-ink/40"
+                />
+                <button
+                  type="submit"
+                  disabled={isGenerating || !studyTopic.trim()}
+                  className="px-6 py-3 bg-accent text-white font-semibold rounded-lg hover:bg-accent/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {isGenerating ? "Generating..." : "Generate"}
+                </button>
+              </form>
+
+              {generationStatus && (
+                <div
+                  className={`p-3 rounded-lg text-sm ${
+                    generationStatus.includes("Error")
+                      ? "bg-red-100 text-red-800"
+                      : "bg-green-100 text-green-800"
+                  }`}
+                >
+                  {generationStatus}
+                </div>
+              )}
+            </div>
+          )}
         </section>
 
+        {/* Query Section - shown when in Q&A mode */}
+        {studyMode === "query" && (
+          <section className="bg-surface rounded-xl p-6 mb-8 shadow-sm">
+            <h2 className="text-xl font-semibold text-ink mb-4">
+              🔍 Ask a Question
+            </h2>
+            <form onSubmit={handleQuery} className="flex gap-3">
+              <input
+                type="text"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Enter your study question..."
+                className="flex-1 px-4 py-3 rounded-lg border border-ink/20 bg-background focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent text-ink placeholder:text-ink/40"
+              />
+              <button
+                type="submit"
+                disabled={isQuerying || !query.trim()}
+                className="px-6 py-3 bg-accent text-white font-semibold rounded-lg hover:bg-accent/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {isQuerying ? "Querying..." : "Ask"}
+              </button>
+            </form>
+          </section>
+        )}
+
+        {/* Flashcard Viewer - shown when in flashcard mode */}
+        {studyMode === "flashcards" && (
+          <section className="bg-surface rounded-xl p-6 mb-8 shadow-sm">
+            <h2 className="text-xl font-semibold text-ink mb-6">
+              🗂️ Flashcards
+            </h2>
+            <FlashcardViewer flashcards={flashcards} />
+          </section>
+        )}
+
+        {/* Quiz Viewer - shown when in quiz mode */}
+        {studyMode === "quiz" && (
+          <section className="bg-surface rounded-xl p-6 mb-8 shadow-sm">
+            <h2 className="text-xl font-semibold text-ink mb-6">
+              📝 Quiz
+            </h2>
+            <QuizViewer quizzes={quizzes} />
+          </section>
+        )}
         {/* Response Section */}
-        {response && (
+        {studyMode === "query" && response && (
           <section className="bg-surface rounded-xl p-6 mb-8 shadow-sm">
             <h2 className="text-xl font-semibold text-ink mb-4">💡 Answer</h2>
             <div className="prose prose-sm max-w-none">
