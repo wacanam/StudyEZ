@@ -10,19 +10,31 @@
 
 ## Tech Stack
 
-- **Framework**: [Next.js 15](https://nextjs.org/) with App Router
-- **RAG Framework**: [LlamaIndex](https://www.llamaindex.ai/)
+- **Framework**: [Next.js 16](https://nextjs.org/) with App Router
+- **RAG Framework**: [LlamaIndex](https://www.llamaindex.ai/) for document chunking, indexing, and retrieval
 - **Vector Database**: [PGVector](https://github.com/pgvector/pgvector) (PostgreSQL)
-- **LLM**: [Gemini 2.5 Flash](https://ai.google.dev/)
+- **LLM**: [Gemini 2.5 Flash](https://ai.google.dev/) via Google Generative AI SDK
 - **ORM**: [Prisma 7](https://www.prisma.io/)
-- **Styling**: [Tailwind CSS](https://tailwindcss.com/) with Inter font (via `next/font`)
+- **Frontend**: [React 19](https://react.dev/) with [Tailwind CSS](https://tailwindcss.com/) and Inter font (via `next/font`)
 
 ## Features
 
 - 📚 **Document Upload**: Upload PDF or TXT study materials
-- 🔍 **RAG Queries**: Ask questions and get AI-powered answers from your materials
+- 🔍 **RAG Queries**: Ask questions and get AI-powered answers from your materials  
 - 📄 **Source References**: View relevant source snippets with relevance scores
 - 📋 **Activity Log**: Track upload and query activity in real-time
+
+## LlamaIndex Integration
+
+This project uses **LlamaIndex** for the core RAG pipeline:
+- **Document Processing**: `Document` class for creating structured documents
+- **Text Chunking**: `SentenceSplitter` for intelligent text segmentation with overlap
+- **Vector Indexing**: `VectorStoreIndex` for building searchable document indexes
+- **Query Engine**: Built-in query engine for semantic search and retrieval
+
+Combined with **Gemini** for:
+- **Embeddings**: `text-embedding-004` model for generating vector embeddings
+- **LLM Responses**: `gemini-2.0-flash` model for generating study-focused answers
 
 ## Getting Started
 
@@ -89,7 +101,7 @@
 | `pnpm dev` | Start development server |
 | `pnpm build` | Build for production |
 | `pnpm start` | Start production server |
-| `pnpm lint` | Run ESLint |
+| `pnpm lint` | Run TypeScript type checking |
 | `pnpm db:push` | Push Prisma schema to database |
 | `pnpm db:studio` | Open Prisma Studio |
 
@@ -105,10 +117,10 @@
 │   ├── layout.tsx            # Root layout with Inter font
 │   └── page.tsx              # Landing page with CTA
 ├── lib/
-│   ├── db.ts                 # Database utilities (Prisma)
-│   └── rag.ts                # RAG utilities (Gemini)
+│   ├── db.ts                 # Database utilities (Prisma + PGVector)
+│   └── rag.ts                # LlamaIndex + Gemini RAG utilities
 ├── prisma/
-│   └── schema.prisma         # Database schema
+│   └── schema.prisma         # Database schema with vector support
 ├── public/
 │   └── logo.png              # StudyEZ logo
 └── prisma.config.ts          # Prisma configuration

@@ -1,5 +1,13 @@
+import {
+  Document,
+  VectorStoreIndex,
+  Settings,
+  storageContextFromDefaults,
+} from "llamaindex";
+import { SentenceSplitter } from "llamaindex";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
+// Google Generative AI client
 let genAI: GoogleGenerativeAI | null = null;
 
 function getGenAI(): GoogleGenerativeAI {
@@ -13,14 +21,19 @@ function getGenAI(): GoogleGenerativeAI {
   return genAI;
 }
 
+/**
+ * Generate embeddings using Google's text-embedding-004 model
+ */
 export async function generateEmbedding(text: string): Promise<number[]> {
   const ai = getGenAI();
   const model = ai.getGenerativeModel({ model: "text-embedding-004" });
-  
   const result = await model.embedContent(text);
   return result.embedding.values;
 }
 
+/**
+ * Generate a response using Gemini 2.5 Flash LLM
+ */
 export async function generateResponse(
   query: string,
   context: string[]
@@ -29,7 +42,7 @@ export async function generateResponse(
   const model = ai.getGenerativeModel({ model: "gemini-2.0-flash" });
 
   const contextText = context.join("\n\n---\n\n");
-  
+
   const prompt = `You are a helpful study assistant. Use the following context from study materials to answer the question. If the context doesn't contain relevant information, say so but try to provide helpful guidance.
 
 Context from study materials:
@@ -44,31 +57,77 @@ Please provide a clear, concise answer that helps with studying. If referencing 
   return response.text();
 }
 
+/**
+ * Chunk text using LlamaIndex's SentenceSplitter
+ */
 export async function chunkText(
   text: string,
-  chunkSize: number = 500,
-  overlap: number = 50
+  chunkSize: number = 512,
+  chunkOverlap: number = 50
 ): Promise<string[]> {
-  const chunks: string[] = [];
-  const sentences = text.split(/(?<=[.!?])\s+/);
-  
-  let currentChunk = "";
-  
-  for (const sentence of sentences) {
-    if (currentChunk.length + sentence.length > chunkSize && currentChunk.length > 0) {
-      chunks.push(currentChunk.trim());
-      // Keep overlap by starting with part of the previous chunk
-      const words = currentChunk.split(" ");
-      const overlapWords = words.slice(-Math.ceil(overlap / 5));
-      currentChunk = overlapWords.join(" ") + " " + sentence;
-    } else {
-      currentChunk += (currentChunk ? " " : "") + sentence;
-    }
-  }
-  
-  if (currentChunk.trim()) {
-    chunks.push(currentChunk.trim());
-  }
-  
-  return chunks;
+  // Create a document from the text
+  const document = new Document({ text });
+
+  // Use LlamaIndex's SentenceSplitter for chunking
+  const splitter = new SentenceSplitter({
+    chunkSize,
+    chunkOverlap,
+  });
+
+  const nodes = splitter.getNodesFromDocuments([document]);
+  return nodes.map((node) => node.getText());
 }
+
+/**
+ * Create a LlamaIndex Document from text content
+ */
+export function createDocument(
+  text: string,
+  metadata: Record<string, unknown> = {}
+): Document {
+  return new Document({
+    text,
+    metadata,
+  });
+}
+
+/**
+ * Build a vector store index from documents using LlamaIndex
+ * Note: This uses in-memory storage for MVP
+ */
+export async function buildIndexFromDocuments(
+  documents: Document[]
+): Promise<VectorStoreIndex> {
+  const storageContext = await storageContextFromDefaults({});
+
+  const index = await VectorStoreIndex.fromDocuments(documents, {
+    storageContext,
+  });
+
+  return index;
+}
+
+/**
+ * Query an index and get response with sources
+ */
+export async function queryIndex(
+  index: VectorStoreIndex,
+  query: string
+): Promise<{ response: string; sources: string[] }> {
+  const queryEngine = index.asQueryEngine();
+  const response = await queryEngine.query({ query });
+
+  const sources = response.sourceNodes?.map((node) => {
+    // Access the text content from the node using unknown first
+    const textNode = node.node as unknown as { text?: string };
+    return textNode.text || "";
+  }) || [];
+
+  return {
+    response: response.toString(),
+    sources,
+  };
+}
+
+// Export Settings for advanced configuration
+export { Settings, Document, VectorStoreIndex };
