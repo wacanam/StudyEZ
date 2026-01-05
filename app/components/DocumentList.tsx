@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useToast, ToastContainer } from "./Toast";
 
 interface DocumentFile {
   fileName: string;
@@ -21,6 +22,8 @@ export default function DocumentList({ onUpdate }: DocumentListProps) {
   const [renamingFile, setRenamingFile] = useState<string | null>(null);
   const [newFileName, setNewFileName] = useState("");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
+  const { messages, showToast, closeToast } = useToast();
 
   useEffect(() => {
     loadDocuments();
@@ -48,10 +51,12 @@ export default function DocumentList({ onUpdate }: DocumentListProps) {
     }
   };
 
-  const handleDelete = async (fileName: string) => {
-    if (!confirm(`Are you sure you want to delete "${fileName}" and all its chunks?`)) {
-      return;
-    }
+  const handleDeleteClick = (fileName: string) => {
+    setShowDeleteConfirm(fileName);
+  };
+
+  const handleDeleteConfirm = async (fileName: string) => {
+    setShowDeleteConfirm(null);
 
     try {
       setActionLoading(fileName);
@@ -70,10 +75,10 @@ export default function DocumentList({ onUpdate }: DocumentListProps) {
       await loadDocuments();
       if (onUpdate) onUpdate();
       
-      alert(data.message);
+      showToast(data.message, "success");
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "Unknown error";
-      alert(`Error: ${errorMessage}`);
+      showToast(`Error: ${errorMessage}`, "error");
       console.error("Error deleting document:", err);
     } finally {
       setActionLoading(null);
@@ -82,7 +87,7 @@ export default function DocumentList({ onUpdate }: DocumentListProps) {
 
   const handleRename = async (oldFileName: string) => {
     if (!newFileName.trim()) {
-      alert("Please enter a new file name");
+      showToast("Please enter a new file name", "error");
       return;
     }
 
@@ -109,10 +114,10 @@ export default function DocumentList({ onUpdate }: DocumentListProps) {
       
       setRenamingFile(null);
       setNewFileName("");
-      alert(data.message);
+      showToast(data.message, "success");
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "Unknown error";
-      alert(`Error: ${errorMessage}`);
+      showToast(`Error: ${errorMessage}`, "error");
       console.error("Error renaming document:", err);
     } finally {
       setActionLoading(null);
@@ -148,6 +153,8 @@ export default function DocumentList({ onUpdate }: DocumentListProps) {
 
   return (
     <div className="space-y-4">
+      <ToastContainer messages={messages} onClose={closeToast} />
+      
       {/* Search Bar */}
       <div className="flex gap-3 items-center">
         <div className="flex-1 relative">
@@ -269,7 +276,7 @@ export default function DocumentList({ onUpdate }: DocumentListProps) {
                       ✏️ Rename
                     </button>
                     <button
-                      onClick={() => handleDelete(file.fileName)}
+                      onClick={() => handleDeleteClick(file.fileName)}
                       disabled={actionLoading === file.fileName}
                       className="px-3 py-1 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm"
                       title="Delete"
@@ -281,6 +288,34 @@ export default function DocumentList({ onUpdate }: DocumentListProps) {
               )}
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-surface rounded-xl p-6 max-w-md w-full mx-4 shadow-xl">
+            <h3 className="text-xl font-semibold text-ink mb-4">
+              Confirm Deletion
+            </h3>
+            <p className="text-ink/70 mb-6">
+              Are you sure you want to delete &quot;{showDeleteConfirm}&quot; and all its chunks? This action cannot be undone.
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setShowDeleteConfirm(null)}
+                className="px-4 py-2 bg-ink/10 text-ink rounded-lg hover:bg-ink/20 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleDeleteConfirm(showDeleteConfirm)}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
