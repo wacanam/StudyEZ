@@ -64,6 +64,7 @@ export async function storeDocument(
   const vectorString = toVectorString(embedding);
   
   // Use raw query to handle vector type
+  // Note: Prisma's $queryRaw with template literals uses parameterized queries, safe from SQL injection
   const result = await db.$queryRaw<{ id: number }[]>`
     INSERT INTO documents (content, embedding, user_id, metadata)
     VALUES (${content}, ${vectorString}::vector, ${userId}, ${JSON.stringify(metadata)}::jsonb)
@@ -95,9 +96,4 @@ export async function searchSimilarDocuments(
   `;
 
   return results;
-}
-
-export async function getDocumentCount(): Promise<number> {
-  const db = getPrisma();
-  return db.document.count();
 }
