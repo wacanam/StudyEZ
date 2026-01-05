@@ -1,6 +1,10 @@
 import { YoutubeTranscript } from "youtube-transcript";
 import * as cheerio from "cheerio";
 
+// Configuration constants
+const FETCH_TIMEOUT_MS = 30000; // 30 seconds
+const MIN_CONTENT_LENGTH = 100; // Minimum characters for valid content
+
 /**
  * Extract YouTube video ID from various YouTube URL formats
  */
@@ -52,11 +56,18 @@ export async function fetchYouTubeTranscript(url: string): Promise<string> {
  */
 export async function scrapeWebPage(url: string): Promise<string> {
   try {
+    // Create an AbortController for timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+
     const response = await fetch(url, {
       headers: {
         "User-Agent": "Mozilla/5.0 (compatible; StudyEZ/1.0; +https://studyez.app)",
       },
+      signal: controller.signal,
     });
+
+    clearTimeout(timeoutId);
 
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
@@ -103,7 +114,7 @@ export async function scrapeWebPage(url: string): Promise<string> {
       .replace(/\n+/g, "\n")
       .trim();
 
-    if (!content || content.length < 100) {
+    if (!content || content.length < MIN_CONTENT_LENGTH) {
       throw new Error("Insufficient content extracted from webpage");
     }
 
