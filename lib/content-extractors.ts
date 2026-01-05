@@ -127,11 +127,30 @@ export async function scrapeWebPage(url: string): Promise<string> {
 }
 
 /**
+ * Check if URL is a valid YouTube URL
+ */
+function isYouTubeUrl(url: string): boolean {
+  try {
+    const urlObj = new URL(url);
+    const hostname = urlObj.hostname.toLowerCase();
+    
+    // Only accept youtube.com and its subdomains, and youtu.be
+    return hostname === "youtube.com" || 
+           hostname === "www.youtube.com" || 
+           hostname.endsWith(".youtube.com") ||
+           hostname === "youtu.be" ||
+           hostname === "www.youtu.be";
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Detect the type of URL and extract content accordingly
  */
 export async function extractContentFromUrl(url: string): Promise<{ content: string; type: "youtube" | "webpage" }> {
   // Check if it's a YouTube URL
-  if (url.includes("youtube.com") || url.includes("youtu.be")) {
+  if (isYouTubeUrl(url)) {
     const content = await fetchYouTubeTranscript(url);
     return { content, type: "youtube" };
   }
