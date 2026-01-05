@@ -86,7 +86,7 @@ export async function POST(request: NextRequest) {
         sessionId: currentSessionId,
         role: "assistant",
         content: answer,
-        sources: JSON.parse(JSON.stringify(sources)),
+        sources: sources as any,
       },
     });
 

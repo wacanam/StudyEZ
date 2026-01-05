@@ -63,7 +63,8 @@ export default function ChatHistory({ onSessionSelect, onHistoryUpdate, selected
       });
 
       if (res.ok) {
-        setSessions([]);
+        // Reload sessions from server to ensure consistency
+        await loadSessions();
         onHistoryUpdate();
       } else {
         const data = await res.json();
@@ -85,9 +86,13 @@ export default function ChatHistory({ onSessionSelect, onHistoryUpdate, selected
         const data = await res.json();
         onSessionSelect(data.session);
         setIsOpen(false);
+      } else {
+        const data = await res.json();
+        alert(`Failed to load session: ${data.error || "Unknown error"}`);
       }
     } catch (error) {
       console.error("Failed to load session:", error);
+      alert("Failed to load chat session. Please try again.");
     }
   };
 
