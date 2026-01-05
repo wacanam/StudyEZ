@@ -1,9 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@clerk/nextjs/server";
 import { searchSimilarDocuments, initializeDatabase } from "@/lib/db";
 import { generateEmbedding, generateResponse } from "@/lib/rag";
 
 export async function POST(request: NextRequest) {
   try {
+    // Get the authenticated user's ID
+    const { userId } = await auth();
+    if (!userId) {
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      );
+    }
+
     const body = await request.json();
     const { query } = body;
 
@@ -20,8 +30,8 @@ export async function POST(request: NextRequest) {
     // Generate embedding for the query
     const queryEmbedding = await generateEmbedding(query);
 
-    // Search for similar documents
-    const similarDocs = await searchSimilarDocuments(queryEmbedding, 5);
+    // Search for similar documents (filtered by userId)
+    const similarDocs = await searchSimilarDocuments(queryEmbedding, userId, 5);
 
     if (similarDocs.length === 0) {
       return NextResponse.json({

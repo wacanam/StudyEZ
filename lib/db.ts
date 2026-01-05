@@ -55,6 +55,7 @@ export async function initializeDatabase(): Promise<void> {
 export async function storeDocument(
   content: string,
   embedding: number[],
+  userId: string,
   metadata: Record<string, unknown> = {}
 ): Promise<number> {
   const db = getPrisma();
@@ -64,8 +65,8 @@ export async function storeDocument(
   
   // Use raw query to handle vector type
   const result = await db.$queryRaw<{ id: number }[]>`
-    INSERT INTO documents (content, embedding, metadata)
-    VALUES (${content}, ${vectorString}::vector, ${JSON.stringify(metadata)}::jsonb)
+    INSERT INTO documents (content, embedding, user_id, metadata)
+    VALUES (${content}, ${vectorString}::vector, ${userId}, ${JSON.stringify(metadata)}::jsonb)
     RETURNING id
   `;
 
@@ -74,6 +75,7 @@ export async function storeDocument(
 
 export async function searchSimilarDocuments(
   embedding: number[],
+  userId: string,
   limit: number = 5
 ): Promise<Array<{ id: number; content: string; score: number; metadata: Record<string, unknown> }>> {
   const db = getPrisma();
@@ -87,7 +89,7 @@ export async function searchSimilarDocuments(
     SELECT id, content, metadata,
            1 - (embedding <=> ${vectorString}::vector) as score
     FROM documents
-    WHERE embedding IS NOT NULL
+    WHERE embedding IS NOT NULL AND user_id = ${userId}
     ORDER BY embedding <=> ${vectorString}::vector
     LIMIT ${limit}
   `;
