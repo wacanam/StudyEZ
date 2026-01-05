@@ -55,7 +55,7 @@ export async function GET(request: NextRequest) {
       fileData.chunkCount++;
       fileData.documentIds.push(doc.id);
       
-      // Keep the earliest upload date
+      // Keep the first upload date (earliest chunk)
       if (doc.createdAt < fileData.uploadDate) {
         fileData.uploadDate = doc.createdAt;
       }
