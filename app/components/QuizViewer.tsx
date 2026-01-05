@@ -152,7 +152,7 @@ export default function QuizViewer({ quizzes }: QuizViewerProps) {
                 </div>
                 <div className="text-lg text-ink/70">
                   Final Score: {score} / {answeredCount} (
-                  {((score / answeredCount) * 100).toFixed(0)}%)
+                  {answeredCount > 0 ? ((score / answeredCount) * 100).toFixed(0) : 0}%)
                 </div>
                 <button
                   onClick={handleReset}

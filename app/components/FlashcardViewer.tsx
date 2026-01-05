@@ -54,13 +54,10 @@ export default function FlashcardViewer({ flashcards }: FlashcardViewerProps) {
         style={{ perspective: "1000px" }}
       >
         <div
-          className={`relative w-full h-full transition-transform duration-500 preserve-3d ${
+          className={`relative w-full h-full transition-transform duration-500 ${
             isFlipped ? "rotate-y-180" : ""
           }`}
-          style={{
-            transformStyle: "preserve-3d",
-            transform: isFlipped ? "rotateY(180deg)" : "rotateY(0deg)",
-          }}
+          style={{ transformStyle: "preserve-3d" }}
         >
           {/* Front of card */}
           <div
