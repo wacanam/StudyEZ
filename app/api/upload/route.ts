@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@clerk/nextjs/server";
 import { initializeDatabase, storeDocument } from "@/lib/db";
 import { generateEmbedding, chunkText } from "@/lib/rag";
 import { GoogleGenerativeAI } from "@google/generative-ai";
@@ -14,6 +15,15 @@ function getGenAI(): GoogleGenerativeAI {
 
 export async function POST(request: NextRequest) {
   try {
+    // Get the authenticated user's ID
+    const { userId } = await auth();
+    if (!userId) {
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      );
+    }
+
     // Initialize database tables if needed
     await initializeDatabase();
 
@@ -61,7 +71,7 @@ export async function POST(request: NextRequest) {
         const chunk = chunks[i];
         const embedding = await generateEmbedding(chunk);
         
-        await storeDocument(chunk, embedding, {
+        await storeDocument(chunk, embedding, userId, {
           fileName,
           chunkIndex: i,
           totalChunks: chunks.length,
