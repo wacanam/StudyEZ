@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { searchSimilarDocuments, initializeDatabase } from "@/lib/db";
+import { searchSimilarDocuments, initializeDatabase, getPrisma } from "@/lib/db";
 import { generateEmbedding, generateResponse } from "@/lib/rag";
 
 export async function POST(request: NextRequest) {
@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { query } = body;
+    const { query, sessionId } = body;
 
     if (!query || typeof query !== "string") {
       return NextResponse.json(
@@ -46,14 +46,55 @@ export async function POST(request: NextRequest) {
     // Generate response using LLM
     const answer = await generateResponse(query, context);
 
-    // Return response with sources
+    // Prepare sources for response
+    const sources = similarDocs.map((doc) => ({
+      text: doc.content.substring(0, 200) + (doc.content.length > 200 ? "..." : ""),
+      score: doc.score,
+      metadata: doc.metadata,
+    }));
+
+    // Save to database
+    const db = getPrisma();
+    let currentSessionId = sessionId;
+
+    // Create or retrieve session
+    if (!currentSessionId) {
+      // Create a new session with first question as title (truncated)
+      const title = query.substring(0, 50) + (query.length > 50 ? "..." : "");
+      const session = await db.chatSession.create({
+        data: {
+          userId,
+          title,
+        },
+      });
+      currentSessionId = session.id;
+    }
+
+    // Save user's question
+    await db.chatMessage.create({
+      data: {
+        sessionId: currentSessionId,
+        role: "user",
+        content: query,
+        sources: [],
+      },
+    });
+
+    // Save assistant's answer
+    await db.chatMessage.create({
+      data: {
+        sessionId: currentSessionId,
+        role: "assistant",
+        content: answer,
+        sources: sources as any,
+      },
+    });
+
+    // Return response with sources and sessionId
     return NextResponse.json({
       answer,
-      sources: similarDocs.map((doc) => ({
-        text: doc.content.substring(0, 200) + (doc.content.length > 200 ? "..." : ""),
-        score: doc.score,
-        metadata: doc.metadata,
-      })),
+      sources,
+      sessionId: currentSessionId,
     });
   } catch (error) {
     console.error("Query error:", error);

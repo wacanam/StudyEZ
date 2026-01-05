@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import FlashcardViewer from "@/app/components/FlashcardViewer";
 import QuizViewer from "@/app/components/QuizViewer";
+import ChatHistory from "@/app/components/ChatHistory";
 
 interface QueryResponse {
   answer: string;
@@ -11,6 +12,7 @@ interface QueryResponse {
     text: string;
     score: number;
   }>;
+  sessionId?: number;
 }
 
 interface UploadStatus {
@@ -39,6 +41,26 @@ interface Quiz {
   createdAt: string;
 }
 
+interface ChatMessage {
+  id: number;
+  role: string;
+  content: string;
+  sources: Array<{
+    text: string;
+    score: number;
+    metadata?: Record<string, unknown>;
+  }>;
+  createdAt: string;
+}
+
+interface ChatSession {
+  id: number;
+  title: string | null;
+  createdAt: string;
+  updatedAt: string;
+  messages: ChatMessage[];
+}
+
 type StudyMode = "query" | "flashcards" | "quiz";
 
 export default function Dashboard() {
@@ -56,6 +78,9 @@ export default function Dashboard() {
   const [flashcards, setFlashcards] = useState<Flashcard[]>([]);
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
   const [generationStatus, setGenerationStatus] = useState("");
+  const [currentSessionId, setCurrentSessionId] = useState<number | null>(null);
+  const [selectedSession, setSelectedSession] = useState<ChatSession | null>(null);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
 
   const addLog = (message: string) => {
     const timestamp = new Date().toLocaleTimeString();
@@ -66,6 +91,44 @@ export default function Dashboard() {
   useEffect(() => {
     loadStudyTools();
   }, []);
+
+  // Handle session selection from history
+  const handleSessionSelect = (session: ChatSession) => {
+    setSelectedSession(session);
+    setChatMessages(session.messages);
+    setCurrentSessionId(session.id);
+    
+    // Display the last response in the session
+    const assistantMessages = session.messages.filter(m => m.role === "assistant");
+    if (assistantMessages.length > 0) {
+      const lastAssistant = assistantMessages[assistantMessages.length - 1];
+      setResponse({
+        answer: lastAssistant.content,
+        sources: lastAssistant.sources,
+        sessionId: session.id,
+      });
+    }
+    
+    addLog(`Loaded chat session: ${session.title || "Untitled"}`);
+  };
+
+  const handleHistoryUpdate = () => {
+    // Reset current session when history is cleared
+    setCurrentSessionId(null);
+    setSelectedSession(null);
+    setChatMessages([]);
+    setResponse(null);
+    addLog("Chat history cleared");
+  };
+
+  const handleNewChat = () => {
+    setCurrentSessionId(null);
+    setSelectedSession(null);
+    setChatMessages([]);
+    setResponse(null);
+    setQuery("");
+    addLog("Started new chat session");
+  };
 
   const loadStudyTools = async () => {
     try {
@@ -185,13 +248,17 @@ export default function Dashboard() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ query }),
+        body: JSON.stringify({ 
+          query,
+          sessionId: currentSessionId,
+        }),
       });
 
       const data = await res.json();
 
       if (res.ok) {
         setResponse(data);
+        setCurrentSessionId(data.sessionId);
         addLog(`Query successful: ${data.sources?.length || 0} sources found`);
       } else {
         addLog(`Query error: ${data.error}`);
@@ -213,24 +280,26 @@ export default function Dashboard() {
   };
 
   return (
-    <main className="min-h-screen bg-background p-8">
-      <div className="max-w-4xl mx-auto">
-        {/* Header with Logo */}
-        <header className="text-center mb-12">
-          <Link href="/" className="inline-block">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/logo.png"
-              alt="StudyEZ Logo"
-              width={180}
-              height={180}
-              className="object-contain mx-auto mb-4"
-            />
-          </Link>
-          <p className="text-ink/70 text-lg">
-            AI-Powered RAG Platform for Effective Study Skills
-          </p>
-        </header>
+    <div className="flex h-screen bg-background">
+      {/* Main content */}
+      <main className="flex-1 overflow-y-auto">
+        <div className="max-w-4xl mx-auto p-8">
+          {/* Header with Logo */}
+          <header className="text-center mb-12">
+            <Link href="/" className="inline-block">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/logo.png"
+                alt="StudyEZ Logo"
+                width={180}
+                height={180}
+                className="object-contain mx-auto mb-4"
+              />
+            </Link>
+            <p className="text-ink/70 text-lg">
+              AI-Powered RAG Platform for Effective Study Skills
+            </p>
+          </header>
 
         {/* Upload Section */}
         <section className="bg-surface rounded-xl p-6 mb-8 shadow-sm">
@@ -369,9 +438,19 @@ export default function Dashboard() {
         {/* Query Section - shown when in Q&A mode */}
         {studyMode === "query" && (
           <section className="bg-surface rounded-xl p-6 mb-8 shadow-sm">
-            <h2 className="text-xl font-semibold text-ink mb-4">
-              🔍 Ask a Question
-            </h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-semibold text-ink">
+                🔍 Ask a Question
+              </h2>
+              {currentSessionId && (
+                <button
+                  onClick={handleNewChat}
+                  className="px-3 py-1 text-sm bg-accent/10 text-accent rounded-lg hover:bg-accent/20 transition-colors"
+                >
+                  + New Chat
+                </button>
+              )}
+            </div>
             <form onSubmit={handleQuery} className="flex gap-3">
               <input
                 type="text"
@@ -465,7 +544,17 @@ export default function Dashboard() {
             Powered by LlamaIndex + PGVector + Gemini 2.5 Flash
           </p>
         </footer>
-      </div>
-    </main>
+        </div>
+      </main>
+
+      {/* Chat History Sidebar - only shown in query mode */}
+      {studyMode === "query" && (
+        <ChatHistory
+          onSessionSelect={handleSessionSelect}
+          onHistoryUpdate={handleHistoryUpdate}
+          selectedSessionId={currentSessionId}
+        />
+      )}
+    </div>
   );
 }

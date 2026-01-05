@@ -24,6 +24,11 @@
 - 📚 **Document Upload**: Upload PDF or TXT study materials (private to your account)
 - 🔍 **RAG Queries**: Ask questions and get AI-powered answers from your materials  
 - 📄 **Source References**: View relevant source snippets with relevance scores
+- 💬 **Chat History**: Persistent chat sessions saved to database
+  - View previous conversations in the History sidebar
+  - Continue existing chat sessions
+  - Clear all chat history with one click
+- 🗂️ **Flashcards & Quizzes**: Generate AI-powered study tools from your materials
 - 📋 **Activity Log**: Track upload and query activity in real-time
 - 🔒 **Private Libraries**: Each user has their own isolated document library
 
@@ -115,20 +120,28 @@ Combined with **Gemini** for:
 ```
 ├── app/
 │   ├── api/
-│   │   ├── query/route.ts    # RAG query endpoint
-│   │   └── upload/route.ts   # Document upload endpoint
-│   ├── dashboard/page.tsx    # Main app (upload + query)
-│   ├── globals.css           # Global styles
-│   ├── layout.tsx            # Root layout with Inter font
-│   └── page.tsx              # Landing page with CTA
+│   │   ├── chat-sessions/
+│   │   │   ├── [id]/route.ts       # Get messages for a specific session
+│   │   │   └── route.ts            # List and delete chat sessions
+│   │   ├── generate-tools/route.ts # Generate flashcards and quizzes
+│   │   ├── query/route.ts          # RAG query endpoint with session tracking
+│   │   └── upload/route.ts         # Document upload endpoint
+│   ├── components/
+│   │   ├── ChatHistory.tsx         # Chat history sidebar component
+│   │   ├── FlashcardViewer.tsx     # Flashcard viewer component
+│   │   └── QuizViewer.tsx          # Quiz viewer component
+│   ├── dashboard/page.tsx          # Main app (upload + query + history)
+│   ├── globals.css                 # Global styles
+│   ├── layout.tsx                  # Root layout with Inter font
+│   └── page.tsx                    # Landing page with CTA
 ├── lib/
-│   ├── db.ts                 # Database utilities (Prisma + PGVector)
-│   └── rag.ts                # LlamaIndex + Gemini RAG utilities
+│   ├── db.ts                       # Database utilities (Prisma + PGVector)
+│   └── rag.ts                      # LlamaIndex + Gemini RAG utilities
 ├── prisma/
-│   └── schema.prisma         # Database schema with vector support
+│   └── schema.prisma               # Database schema with chat sessions
 ├── public/
-│   └── logo.png              # StudyEZ logo
-└── prisma.config.ts          # Prisma configuration
+│   └── logo.png                    # StudyEZ logo
+└── prisma.config.ts                # Prisma configuration
 ```
 
 ## License
