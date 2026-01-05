@@ -1,285 +1,206 @@
-"use client";
+import Link from "next/link";
+import Image from "next/image";
 
-import { useState } from "react";
-
-interface QueryResponse {
-  answer: string;
-  sources: Array<{
-    text: string;
-    score: number;
-  }>;
-}
-
-interface UploadStatus {
-  status: "idle" | "uploading" | "processing" | "success" | "error";
-  message: string;
-  documentsCount?: number;
-}
-
-export default function Home() {
-  const [query, setQuery] = useState("");
-  const [response, setResponse] = useState<QueryResponse | null>(null);
-  const [isQuerying, setIsQuerying] = useState(false);
-  const [uploadStatus, setUploadStatus] = useState<UploadStatus>({
-    status: "idle",
-    message: "",
-  });
-  const [logs, setLogs] = useState<string[]>([]);
-
-  const addLog = (message: string) => {
-    const timestamp = new Date().toLocaleTimeString();
-    setLogs((prev) => [...prev, `[${timestamp}] ${message}`]);
-  };
-
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
-
-    setUploadStatus({ status: "uploading", message: "Uploading files..." });
-    addLog(`Starting upload of ${files.length} file(s)`);
-
-    const formData = new FormData();
-    for (let i = 0; i < files.length; i++) {
-      formData.append("files", files[i]);
-      addLog(`Added file: ${files[i].name}`);
-    }
-
-    try {
-      const res = await fetch("/api/upload", {
-        method: "POST",
-        body: formData,
-      });
-
-      const data = await res.json();
-
-      if (res.ok) {
-        setUploadStatus({
-          status: "success",
-          message: data.message,
-          documentsCount: data.documentsCount,
-        });
-        addLog(`Upload successful: ${data.documentsCount} chunks created`);
-      } else {
-        setUploadStatus({
-          status: "error",
-          message: data.error || "Upload failed",
-        });
-        addLog(`Upload error: ${data.error}`);
-      }
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Unknown error";
-      setUploadStatus({
-        status: "error",
-        message: errorMessage,
-      });
-      addLog(`Upload exception: ${errorMessage}`);
-    }
-
-    // Reset file input
-    e.target.value = "";
-  };
-
-  const handleQuery = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!query.trim()) return;
-
-    setIsQuerying(true);
-    setResponse(null);
-    addLog(`Querying: "${query}"`);
-
-    try {
-      const res = await fetch("/api/query", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ query }),
-      });
-
-      const data = await res.json();
-
-      if (res.ok) {
-        setResponse(data);
-        addLog(`Query successful: ${data.sources?.length || 0} sources found`);
-      } else {
-        addLog(`Query error: ${data.error}`);
-        setResponse({
-          answer: `Error: ${data.error}`,
-          sources: [],
-        });
-      }
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Unknown error";
-      addLog(`Query exception: ${errorMessage}`);
-      setResponse({
-        answer: `Error: ${errorMessage}`,
-        sources: [],
-      });
-    }
-
-    setIsQuerying(false);
-  };
-
+export default function LandingPage() {
   return (
-    <main className="min-h-screen bg-background p-8">
-      <div className="max-w-4xl mx-auto">
-        {/* Header with Logo */}
-        <header className="text-center mb-12">
-          <div className="flex justify-center mb-4">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/logo.svg"
-              alt="StudyEZ Logo"
-              width={200}
-              height={200}
+    <main className="min-h-screen bg-background">
+      {/* Navigation */}
+      <nav className="fixed top-0 left-0 right-0 bg-background/80 backdrop-blur-sm z-50 border-b border-ink/10">
+        <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Image
+              src="/logo.png"
+              alt="StudyEZ"
+              width={40}
+              height={40}
               className="object-contain"
             />
+            <span className="font-semibold text-ink text-lg">StudyEZ</span>
           </div>
-          <p className="text-ink/70 text-lg">
-            AI-Powered RAG Platform for Effective Study Skills
-          </p>
-        </header>
+          <Link
+            href="/dashboard"
+            className="px-4 py-2 bg-accent text-white font-medium rounded-lg hover:bg-accent/90 transition-colors"
+          >
+            Get Started
+          </Link>
+        </div>
+      </nav>
 
-        {/* Upload Section */}
-        <section className="bg-surface rounded-xl p-6 mb-8 shadow-sm">
-          <h2 className="text-xl font-semibold text-ink mb-4">
-            📚 Upload Study Materials
-          </h2>
-          <div className="flex flex-col gap-4">
-            <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-accent/50 rounded-lg cursor-pointer hover:bg-accent/5 transition-colors">
-              <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                <svg
-                  className="w-8 h-8 mb-2 text-accent"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
-                  />
-                </svg>
-                <p className="text-sm text-ink/70">
-                  <span className="font-semibold text-accent">Click to upload</span>{" "}
-                  or drag and drop
-                </p>
-                <p className="text-xs text-ink/50">PDF or TXT files</p>
-              </div>
-              <input
-                type="file"
-                className="hidden"
-                accept=".pdf,.txt"
-                multiple
-                onChange={handleFileUpload}
-              />
-            </label>
-
-            {uploadStatus.status !== "idle" && (
-              <div
-                className={`p-3 rounded-lg text-sm ${
-                  uploadStatus.status === "success"
-                    ? "bg-green-100 text-green-800"
-                    : uploadStatus.status === "error"
-                    ? "bg-red-100 text-red-800"
-                    : "bg-accent/10 text-accent"
-                }`}
-              >
-                {uploadStatus.status === "uploading" && "⏳ "}
-                {uploadStatus.status === "processing" && "⚙️ "}
-                {uploadStatus.status === "success" && "✅ "}
-                {uploadStatus.status === "error" && "❌ "}
-                {uploadStatus.message}
-                {uploadStatus.documentsCount && (
-                  <span className="ml-2">
-                    ({uploadStatus.documentsCount} chunks indexed)
-                  </span>
-                )}
-              </div>
-            )}
-          </div>
-        </section>
-
-        {/* Query Section */}
-        <section className="bg-surface rounded-xl p-6 mb-8 shadow-sm">
-          <h2 className="text-xl font-semibold text-ink mb-4">
-            🔍 Ask a Question
-          </h2>
-          <form onSubmit={handleQuery} className="flex gap-3">
-            <input
-              type="text"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Enter your study question..."
-              className="flex-1 px-4 py-3 rounded-lg border border-ink/20 bg-background focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent text-ink placeholder:text-ink/40"
+      {/* Hero Section */}
+      <section className="pt-32 pb-20 px-6">
+        <div className="max-w-6xl mx-auto text-center">
+          <div className="flex justify-center mb-8">
+            <Image
+              src="/logo.png"
+              alt="StudyEZ Logo"
+              width={280}
+              height={280}
+              className="object-contain"
+              priority
             />
-            <button
-              type="submit"
-              disabled={isQuerying || !query.trim()}
-              className="px-6 py-3 bg-accent text-white font-semibold rounded-lg hover:bg-accent/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          </div>
+          <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-ink mb-6">
+            Study Smarter with{" "}
+            <span className="text-accent">AI-Powered</span> Learning
+          </h1>
+          <p className="text-xl text-ink/70 max-w-2xl mx-auto mb-10">
+            Upload your study materials and let our AI help you understand, summarize, 
+            and answer questions from your documents instantly.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <Link
+              href="/dashboard"
+              className="px-8 py-4 bg-accent text-white font-semibold text-lg rounded-xl hover:bg-accent/90 transition-all hover:scale-105 shadow-lg shadow-accent/25"
             >
-              {isQuerying ? "Querying..." : "Ask"}
-            </button>
-          </form>
-        </section>
+              Start Learning Now →
+            </Link>
+            <a
+              href="#features"
+              className="px-8 py-4 bg-surface text-ink font-semibold text-lg rounded-xl hover:bg-surface/80 transition-all border border-ink/10"
+            >
+              Learn More
+            </a>
+          </div>
+        </div>
+      </section>
 
-        {/* Response Section */}
-        {response && (
-          <section className="bg-surface rounded-xl p-6 mb-8 shadow-sm">
-            <h2 className="text-xl font-semibold text-ink mb-4">💡 Answer</h2>
-            <div className="prose prose-sm max-w-none">
-              <p className="text-ink whitespace-pre-wrap">{response.answer}</p>
+      {/* Features Section */}
+      <section id="features" className="py-20 px-6 bg-surface/50">
+        <div className="max-w-6xl mx-auto">
+          <h2 className="text-3xl md:text-4xl font-bold text-ink text-center mb-4">
+            Everything You Need to Excel
+          </h2>
+          <p className="text-ink/60 text-center mb-12 max-w-2xl mx-auto">
+            Powerful AI features designed to transform how you study and retain information.
+          </p>
+          <div className="grid md:grid-cols-3 gap-8">
+            {/* Feature 1 */}
+            <div className="bg-background rounded-2xl p-8 shadow-sm border border-ink/5">
+              <div className="w-14 h-14 bg-accent/10 rounded-xl flex items-center justify-center mb-6">
+                <svg className="w-7 h-7 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                </svg>
+              </div>
+              <h3 className="text-xl font-semibold text-ink mb-3">Easy Upload</h3>
+              <p className="text-ink/60">
+                Simply drag and drop your PDF or text files. Our system handles the rest, 
+                processing and indexing your content automatically.
+              </p>
             </div>
 
-            {response.sources && response.sources.length > 0 && (
-              <div className="mt-6">
-                <h3 className="text-lg font-medium text-ink mb-3">
-                  📄 Referenced Sources
-                </h3>
-                <div className="space-y-3">
-                  {response.sources.map((source, index) => (
-                    <div
-                      key={index}
-                      className="p-3 bg-background rounded-lg border border-ink/10"
-                    >
-                      <p className="text-sm text-ink/80">{source.text}</p>
-                      <p className="text-xs text-ink/50 mt-1">
-                        Relevance: {(source.score * 100).toFixed(1)}%
-                      </p>
-                    </div>
-                  ))}
-                </div>
+            {/* Feature 2 */}
+            <div className="bg-background rounded-2xl p-8 shadow-sm border border-ink/5">
+              <div className="w-14 h-14 bg-accent/10 rounded-xl flex items-center justify-center mb-6">
+                <svg className="w-7 h-7 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                </svg>
               </div>
-            )}
-          </section>
-        )}
+              <h3 className="text-xl font-semibold text-ink mb-3">Smart Q&A</h3>
+              <p className="text-ink/60">
+                Ask any question about your materials and get accurate, context-aware 
+                answers powered by advanced RAG technology.
+              </p>
+            </div>
 
-        {/* Log Panel */}
-        <section className="bg-surface rounded-xl p-6 shadow-sm">
-          <h2 className="text-xl font-semibold text-ink mb-4">
-            📋 Activity Log
-          </h2>
-          <div className="bg-ink/5 rounded-lg p-4 h-48 overflow-y-auto font-mono text-xs">
-            {logs.length === 0 ? (
-              <p className="text-ink/40">No activity yet...</p>
-            ) : (
-              logs.map((log, index) => (
-                <p key={index} className="text-ink/70 mb-1">
-                  {log}
-                </p>
-              ))
-            )}
+            {/* Feature 3 */}
+            <div className="bg-background rounded-2xl p-8 shadow-sm border border-ink/5">
+              <div className="w-14 h-14 bg-accent/10 rounded-xl flex items-center justify-center mb-6">
+                <svg className="w-7 h-7 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+              </div>
+              <h3 className="text-xl font-semibold text-ink mb-3">Source References</h3>
+              <p className="text-ink/60">
+                Every answer comes with referenced sources from your documents, 
+                so you can verify and explore further.
+              </p>
+            </div>
           </div>
-        </section>
+        </div>
+      </section>
 
-        {/* Footer */}
-        <footer className="text-center mt-8 text-sm text-ink/50">
-          <p>
-            Powered by LlamaIndex + PGVector + Gemini 2.5 Flash
+      {/* How It Works */}
+      <section className="py-20 px-6">
+        <div className="max-w-6xl mx-auto">
+          <h2 className="text-3xl md:text-4xl font-bold text-ink text-center mb-4">
+            How It Works
+          </h2>
+          <p className="text-ink/60 text-center mb-12 max-w-2xl mx-auto">
+            Get started in three simple steps
           </p>
-        </footer>
-      </div>
+          <div className="grid md:grid-cols-3 gap-8">
+            <div className="text-center">
+              <div className="w-16 h-16 bg-accent text-white rounded-full flex items-center justify-center text-2xl font-bold mx-auto mb-6">
+                1
+              </div>
+              <h3 className="text-xl font-semibold text-ink mb-3">Upload Materials</h3>
+              <p className="text-ink/60">
+                Upload your study documents, notes, or textbooks in PDF or text format.
+              </p>
+            </div>
+            <div className="text-center">
+              <div className="w-16 h-16 bg-accent text-white rounded-full flex items-center justify-center text-2xl font-bold mx-auto mb-6">
+                2
+              </div>
+              <h3 className="text-xl font-semibold text-ink mb-3">AI Processing</h3>
+              <p className="text-ink/60">
+                Our AI analyzes and indexes your content using advanced vector embeddings.
+              </p>
+            </div>
+            <div className="text-center">
+              <div className="w-16 h-16 bg-accent text-white rounded-full flex items-center justify-center text-2xl font-bold mx-auto mb-6">
+                3
+              </div>
+              <h3 className="text-xl font-semibold text-ink mb-3">Ask Questions</h3>
+              <p className="text-ink/60">
+                Ask any question and get instant, accurate answers from your materials.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* CTA Section */}
+      <section className="py-20 px-6 bg-accent">
+        <div className="max-w-4xl mx-auto text-center">
+          <h2 className="text-3xl md:text-4xl font-bold text-white mb-6">
+            Ready to Transform Your Study Experience?
+          </h2>
+          <p className="text-white/80 text-lg mb-8 max-w-2xl mx-auto">
+            Join thousands of students who are already studying smarter with StudyEZ.
+          </p>
+          <Link
+            href="/dashboard"
+            className="inline-block px-10 py-4 bg-white text-accent font-semibold text-lg rounded-xl hover:bg-white/90 transition-all hover:scale-105 shadow-lg"
+          >
+            Get Started Free →
+          </Link>
+        </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="py-12 px-6 bg-ink">
+        <div className="max-w-6xl mx-auto">
+          <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+            <div className="flex items-center gap-2">
+              <Image
+                src="/logo.png"
+                alt="StudyEZ"
+                width={32}
+                height={32}
+                className="object-contain brightness-0 invert"
+              />
+              <span className="font-semibold text-white">StudyEZ</span>
+            </div>
+            <p className="text-white/60 text-sm">
+              Powered by LlamaIndex + PGVector + Gemini 2.5 Flash
+            </p>
+            <p className="text-white/40 text-sm">
+              © {new Date().getFullYear()} StudyEZ. All rights reserved.
+            </p>
+          </div>
+        </div>
+      </footer>
     </main>
   );
 }
