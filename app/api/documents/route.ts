@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { requireAuth, isAuthSuccess } from "@/lib/middleware/auth-middleware";
 import { ErrorHandler } from "@/lib/utils/error-handler";
+import { ApiResponseBuilder } from "@/lib/utils/api-response";
 import { getPrisma } from "@/lib/db";
 
 export async function GET(request: NextRequest) {
@@ -63,7 +64,7 @@ export async function GET(request: NextRequest) {
     // Convert map to array
     const fileList = Array.from(fileMap.values());
 
-    return NextResponse.json({
+    return ApiResponseBuilder.success({
       files: fileList,
       totalDocuments: documents.length,
     });

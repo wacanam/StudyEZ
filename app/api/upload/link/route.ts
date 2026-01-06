@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { requireAuth, isAuthSuccess } from "@/lib/middleware/auth-middleware";
 import { ErrorHandler } from "@/lib/utils/error-handler";
+import { ApiResponseBuilder } from "@/lib/utils/api-response";
 import { initializeDatabase, storeDocument } from "@/lib/db";
 import { generateEmbedding, chunkText } from "@/lib/rag";
 import { extractContentFromUrl } from "@/lib/content-extractors";
@@ -61,7 +62,7 @@ export async function POST(request: NextRequest) {
       totalChunks++;
     }
 
-    return NextResponse.json({
+    return ApiResponseBuilder.success({
       message: `Successfully processed ${type}`,
       documentsCount: totalChunks,
       url,

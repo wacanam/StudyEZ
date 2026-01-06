@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { requireAuth, isAuthSuccess } from "@/lib/middleware/auth-middleware";
 import { ErrorHandler } from "@/lib/utils/error-handler";
+import { ApiResponseBuilder } from "@/lib/utils/api-response";
 import { getPrisma } from "@/lib/db";
 
 // DELETE /api/upload/[fileName] - Delete all chunks of a file
@@ -32,7 +33,7 @@ export async function DELETE(
       return ErrorHandler.notFound("Document not found");
     }
 
-    return NextResponse.json({
+    return ApiResponseBuilder.success({
       message: `Successfully deleted ${result} chunk(s) of ${fileName}`,
       deletedChunks: result,
     });
@@ -78,7 +79,7 @@ export async function PATCH(
       return ErrorHandler.notFound("Document not found");
     }
 
-    return NextResponse.json({
+    return ApiResponseBuilder.success({
       message: `Successfully renamed ${oldFileName} to ${newFileName.trim()}`,
       updatedChunks: result,
     });

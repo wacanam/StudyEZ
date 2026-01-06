@@ -1,5 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
+import { ApiResponseBuilder } from "../utils/api-response";
 
 /**
  * Authentication result interface
@@ -27,10 +28,7 @@ export async function requireAuth(): Promise<AuthCheckResult> {
   if (!userId) {
     return {
       success: false,
-      error: NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      ),
+      error: ApiResponseBuilder.unauthorized(),
     };
   }
 

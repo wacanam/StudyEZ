@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { requireAuth, isAuthSuccess } from "@/lib/middleware/auth-middleware";
 import { ErrorHandler } from "@/lib/utils/error-handler";
+import { ApiResponseBuilder } from "@/lib/utils/api-response";
 import { getPrisma } from "@/lib/db";
 
 // GET messages for a specific chat session
@@ -39,7 +40,7 @@ export async function GET(
       return ErrorHandler.notFound("Session not found");
     }
 
-    return NextResponse.json({ session });
+    return ApiResponseBuilder.success({ session });
   } catch (error) {
     return ErrorHandler.handleRouteError(error, "Failed to retrieve chat messages");
   }

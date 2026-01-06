@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { requireAuth, isAuthSuccess } from "@/lib/middleware/auth-middleware";
 import { ErrorHandler } from "@/lib/utils/error-handler";
+import { ApiResponseBuilder } from "@/lib/utils/api-response";
 import { hybridSearch, initializeDatabase, getPrisma } from "@/lib/db";
 import { generateEmbedding, generateResponse, rerankDocuments } from "@/lib/rag";
 
@@ -30,7 +31,7 @@ export async function POST(request: NextRequest) {
     const candidateDocs = await hybridSearch(query, queryEmbedding, userId, 10);
 
     if (candidateDocs.length === 0) {
-      return NextResponse.json({
+      return ApiResponseBuilder.success({
         answer: "No relevant study materials found. Please upload some documents first.",
         sources: [],
         confidenceScore: 0,
@@ -117,7 +118,7 @@ export async function POST(request: NextRequest) {
     });
 
     // Return response with sources, sessionId, and confidence score
-    return NextResponse.json({
+    return ApiResponseBuilder.success({
       answer,
       sources,
       sessionId: currentSessionId,

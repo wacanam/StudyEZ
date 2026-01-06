@@ -1,15 +1,12 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { requireAuth, isAuthSuccess } from "@/lib/middleware/auth-middleware";
 import { ErrorHandler } from "@/lib/utils/error-handler";
+import { ApiResponseBuilder } from "@/lib/utils/api-response";
 import { AIResponseParser } from "@/lib/utils/ai-response-parser";
 import { searchSimilarDocuments } from "@/lib/db";
 import { generateEmbedding } from "@/lib/rag";
 import { getAIClient } from "@/lib/ai-client";
 import { getPrisma } from "@/lib/db";
-
-function getGenAI() {
-  return getAIClient();
-}
 
 interface Flashcard {
   question: string;
@@ -53,7 +50,7 @@ export async function POST(request: NextRequest) {
     const context = similarDocs.map((doc) => doc.content).join("\n\n");
 
     // Generate flashcards and quiz questions using Gemini
-    const genAI = getGenAI();
+    const genAI = getAIClient();
     const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
     const prompt = `You are a study assistant. Based on the following study material about "${topic}", generate educational tools to help students learn.
@@ -143,7 +140,7 @@ Important:
 
     await Promise.all([...flashcardPromises, ...quizPromises]);
 
-    return NextResponse.json({
+    return ApiResponseBuilder.success({
       message: "Successfully generated study tools",
       flashcards: data.flashcards,
       quizzes: data.quizzes,
@@ -175,7 +172,7 @@ export async function GET(request: NextRequest) {
       orderBy: { createdAt: "desc" },
     });
 
-    return NextResponse.json({
+    return ApiResponseBuilder.success({
       flashcards,
       quizzes,
     });

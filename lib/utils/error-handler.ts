@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { ApiResponseBuilder } from "./api-response";
 
 /**
  * Standardized error response utility
@@ -13,14 +13,13 @@ export class ErrorHandler {
     error: unknown,
     context: string,
     status: number = 500
-  ): NextResponse {
+  ) {
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
-    console.error(`${context}:`, error);
     
-    return NextResponse.json(
-      { error: `${context}: ${errorMessage}` },
-      { status }
-    );
+    // Log error details (without sensitive information)
+    console.error(`[${context}] Error:`, errorMessage);
+    
+    return ApiResponseBuilder.error(`${context}: ${errorMessage}`, status);
   }
 
   /**
@@ -29,27 +28,35 @@ export class ErrorHandler {
   static async handleRouteError(
     error: unknown,
     context: string
-  ): Promise<NextResponse> {
+  ) {
     return this.createErrorResponse(error, context, 500);
   }
 
   /**
    * Create a bad request error response
    */
-  static badRequest(message: string): NextResponse {
-    return NextResponse.json(
-      { error: message },
-      { status: 400 }
-    );
+  static badRequest(message: string) {
+    return ApiResponseBuilder.badRequest(message);
+  }
+
+  /**
+   * Create an unauthorized error response
+   */
+  static unauthorized(message?: string) {
+    return ApiResponseBuilder.unauthorized(message);
   }
 
   /**
    * Create a not found error response
    */
-  static notFound(message: string): NextResponse {
-    return NextResponse.json(
-      { error: message },
-      { status: 404 }
-    );
+  static notFound(message: string) {
+    return ApiResponseBuilder.notFound(message);
+  }
+
+  /**
+   * Create an internal server error response
+   */
+  static internalError(message: string) {
+    return ApiResponseBuilder.internalError(message);
   }
 }

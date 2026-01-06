@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { requireAuth, isAuthSuccess } from "@/lib/middleware/auth-middleware";
 import { ErrorHandler } from "@/lib/utils/error-handler";
+import { ApiResponseBuilder } from "@/lib/utils/api-response";
 import { getPrisma } from "@/lib/db";
 
 // GET all chat sessions for the authenticated user
@@ -26,7 +27,7 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    return NextResponse.json({ sessions });
+    return ApiResponseBuilder.success({ sessions });
   } catch (error) {
     return ErrorHandler.handleRouteError(error, "Failed to retrieve chat sessions");
   }
@@ -49,7 +50,9 @@ export async function DELETE(request: NextRequest) {
       where: { userId },
     });
 
-    return NextResponse.json({ message: "Chat history cleared successfully" });
+    return ApiResponseBuilder.success({
+      message: "Chat history cleared successfully",
+    });
   } catch (error) {
     return ErrorHandler.handleRouteError(error, "Failed to clear chat history");
   }
