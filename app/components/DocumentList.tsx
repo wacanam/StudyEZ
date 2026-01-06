@@ -34,14 +34,15 @@ export default function DocumentList({ onUpdate }: DocumentListProps) {
       setLoading(true);
       setError(null);
       const res = await fetch("/api/documents");
-      
+
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "Failed to load documents");
+        const response = await res.json();
+        throw new Error(response.error?.message || "Failed to load documents");
       }
-      
-      const data = await res.json();
-      setFiles(data.files || []);
+
+      const response = await res.json();
+      // API returns { success: true, data: { files: [...] } }
+      setFiles(response.data?.files || []);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "Unknown error";
       setError(errorMessage);
@@ -74,7 +75,7 @@ export default function DocumentList({ onUpdate }: DocumentListProps) {
       // Reload documents after successful deletion
       await loadDocuments();
       if (onUpdate) onUpdate();
-      
+
       showToast(data.message, "success");
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "Unknown error";
@@ -111,7 +112,7 @@ export default function DocumentList({ onUpdate }: DocumentListProps) {
       // Reload documents after successful rename
       await loadDocuments();
       if (onUpdate) onUpdate();
-      
+
       setRenamingFile(null);
       setNewFileName("");
       showToast(data.message, "success");
@@ -154,7 +155,7 @@ export default function DocumentList({ onUpdate }: DocumentListProps) {
   return (
     <div className="space-y-4">
       <ToastContainer messages={messages} onClose={closeToast} />
-      
+
       {/* Search Bar */}
       <div className="flex gap-3 items-center">
         <div className="flex-1 relative">

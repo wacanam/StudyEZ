@@ -3,6 +3,9 @@
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { UserButton } from "@clerk/nextjs";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import rehypeRaw from "rehype-raw";
 import FlashcardViewer from "@/app/components/FlashcardViewer";
 import QuizViewer from "@/app/components/QuizViewer";
 import ChatHistory from "@/app/components/ChatHistory";
@@ -142,6 +145,7 @@ export default function Dashboard() {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [speakingMessageId, setSpeakingMessageId] = useState<number | null>(null);
   const [isHandsFreeModeEnabled, setIsHandsFreeModeEnabled] = useState(false);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const speechSynthesisRef = useRef<SpeechSynthesisUtterance | null>(null);
@@ -214,7 +218,7 @@ export default function Dashboard() {
     setSelectedSession(session);
     setChatMessages(session.messages);
     setCurrentSessionId(session.id);
-    
+
     // Display the last response in the session
     const assistantMessages = session.messages.filter(m => m.role === "assistant");
     if (assistantMessages.length > 0) {
@@ -225,7 +229,7 @@ export default function Dashboard() {
         sessionId: session.id,
       });
     }
-    
+
     addLog(`Loaded chat session: ${session.title || "Untitled"}`);
   };
 
@@ -251,13 +255,21 @@ export default function Dashboard() {
     try {
       const res = await fetch("/api/generate-tools");
       if (res.ok) {
-        const data = await res.json();
-        setFlashcards(data.flashcards || []);
-        setQuizzes(data.quizzes || []);
-        addLog(`Loaded ${data.flashcards?.length || 0} flashcards and ${data.quizzes?.length || 0} quizzes`);
+        const response = await res.json();
+        // API returns { success: true, data: { flashcards: [...], quizzes: [...] } }
+        const flashcardsData = response.data?.flashcards || [];
+        const quizzesData = response.data?.quizzes || [];
+        setFlashcards(flashcardsData);
+        setQuizzes(quizzesData);
+        addLog(`Loaded ${flashcardsData.length} flashcards and ${quizzesData.length} quizzes`);
+      } else {
+        console.error("Failed to load study tools:", res.statusText);
+        addLog("[Failed to retrieve study tools] Error: " + res.statusText);
       }
     } catch (error) {
       console.error("Failed to load study tools:", error);
+      const errorMsg = error instanceof Error ? error.message : "Unknown error";
+      addLog(`[Failed to retrieve study tools] Error: ${errorMsg}`);
     }
   };
 
@@ -278,11 +290,14 @@ export default function Dashboard() {
         body: JSON.stringify({ topic: studyTopic }),
       });
 
-      const data = await res.json();
+      const response = await res.json();
 
       if (res.ok) {
+        // API returns { success: true, data: { flashcards: [...], quizzes: [...] } }
+        const flashcardsCount = response.data?.flashcards?.length || 0;
+        const quizzesCount = response.data?.quizzes?.length || 0;
         setGenerationStatus("Successfully generated study tools!");
-        addLog(`Generated ${data.flashcards?.length || 0} flashcards and ${data.quizzes?.length || 0} quiz questions`);
+        addLog(`Generated ${flashcardsCount} flashcards and ${quizzesCount} quiz questions`);
         // Reload the study tools
         await loadStudyTools();
         // Switch to the appropriate mode
@@ -290,13 +305,14 @@ export default function Dashboard() {
           setStudyMode("flashcards");
         }
       } else {
-        setGenerationStatus(`Error: ${data.error}`);
-        addLog(`Generation error: ${data.error}`);
+        const errorMsg = response.error?.message || response.error || "Unknown error";
+        setGenerationStatus(`Error: ${errorMsg}`);
+        addLog(`[Generation error] ${errorMsg}`);
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Unknown error";
       setGenerationStatus(`Error: ${errorMessage}`);
-      addLog(`Generation exception: ${errorMessage}`);
+      addLog(`[Generation error] ${errorMessage}`);
     }
 
     setIsGenerating(false);
@@ -322,21 +338,24 @@ export default function Dashboard() {
         body: formData,
       });
 
-      const data = await res.json();
+      const response = await res.json();
 
       if (res.ok) {
+        // API returns { success: true, data: { message, documentsCount } }
+        const uploadData = response.data;
         setUploadStatus({
           status: "success",
-          message: data.message,
-          documentsCount: data.documentsCount,
+          message: uploadData.message,
+          documentsCount: uploadData.documentsCount,
         });
-        addLog(`Upload successful: ${data.documentsCount} chunks created`);
+        addLog(`Upload successful: ${uploadData.documentsCount} chunks created`);
       } else {
+        const errorMsg = response.error?.message || response.error || "Upload failed";
         setUploadStatus({
           status: "error",
-          message: data.error || "Upload failed",
+          message: errorMsg,
         });
-        addLog(`Upload error: ${data.error}`);
+        addLog(`Upload error: ${errorMsg}`);
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Unknown error";
@@ -367,22 +386,25 @@ export default function Dashboard() {
         body: JSON.stringify({ url: linkUrl }),
       });
 
-      const data = await res.json();
+      const response = await res.json();
 
       if (res.ok) {
+        // API returns { success: true, data: { message, documentsCount, type } }
+        const uploadData = response.data;
         setUploadStatus({
           status: "success",
-          message: data.message,
-          documentsCount: data.documentsCount,
+          message: uploadData.message,
+          documentsCount: uploadData.documentsCount,
         });
-        addLog(`URL processing successful: ${data.documentsCount} chunks created from ${data.type}`);
+        addLog(`URL processing successful: ${uploadData.documentsCount} chunks created from ${uploadData.type}`);
         setLinkUrl("");
       } else {
+        const errorMsg = response.error?.message || response.error || "Failed to process URL";
         setUploadStatus({
           status: "error",
-          message: data.error || "Failed to process URL",
+          message: errorMsg,
         });
-        addLog(`URL processing error: ${data.error}`);
+        addLog(`URL processing error: ${errorMsg}`);
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Unknown error";
@@ -408,30 +430,33 @@ export default function Dashboard() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           query,
           sessionId: currentSessionId,
         }),
       });
 
-      const data = await res.json();
+      const response = await res.json();
 
       if (res.ok) {
-        setResponse(data);
-        setCurrentSessionId(data.sessionId);
-        addLog(`Query successful: ${data.sources?.length || 0} sources found`);
-        
+        // API returns { success: true, data: { answer, sources, sessionId, confidenceScore } }
+        const queryData = response.data;
+        setResponse(queryData);
+        setCurrentSessionId(queryData.sessionId);
+        addLog(`Query successful: ${queryData.sources?.length || 0} sources found`);
+
         // Auto-read answer in hands-free mode
         // Small delay to ensure the UI updates before starting speech
-        if (isHandsFreeModeEnabled && data.answer) {
+        if (isHandsFreeModeEnabled && queryData.answer) {
           setTimeout(() => {
-            readAloud(data.answer);
+            readAloud(queryData.answer);
           }, 500);
         }
       } else {
-        addLog(`Query error: ${data.error}`);
+        const errorMsg = response.error?.message || response.error || "Unknown error";
+        addLog(`Query error: ${errorMsg}`);
         setResponse({
-          answer: `Error: ${data.error}`,
+          answer: `Error: ${errorMsg}`,
           sources: [],
         });
       }
@@ -470,35 +495,78 @@ export default function Dashboard() {
     }
   };
 
-  const readAloud = (text: string) => {
+  const stripMarkdown = (text: string): string => {
+    return text
+      // Remove headers (###, ##, #)
+      .replace(/^#{1,6}\s+/gm, '')
+      // Remove bold/italic (**text**, *text*, __text__, _text_)
+      .replace(/(\*\*|__)(.*?)\1/g, '$2')
+      .replace(/(\*|_)(.*?)\1/g, '$2')
+      // Remove inline code (`code`)
+      .replace(/`([^`]+)`/g, '$1')
+      // Remove code blocks (```code```)
+      .replace(/```[\s\S]*?```/g, '')
+      // Remove links [text](url)
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+      // Remove images ![alt](url)
+      .replace(/!\[([^\]]*)\]\([^)]+\)/g, '$1')
+      // Remove blockquotes (>)
+      .replace(/^>\s+/gm, '')
+      // Remove horizontal rules (---, ***)
+      .replace(/^[-*_]{3,}\s*$/gm, '')
+      // Remove list markers (-, *, +, 1.)
+      .replace(/^[\s]*[-*+]\s+/gm, '')
+      .replace(/^[\s]*\d+\.\s+/gm, '')
+      // Remove extra whitespace
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+  };
+
+  const readAloud = (text: string, messageId?: number) => {
     // Stop any ongoing speech
     window.speechSynthesis.cancel();
 
-    if (isSpeaking) {
+    // If clicking the same message that's playing, stop it
+    if (isSpeaking && messageId !== undefined && messageId === speakingMessageId) {
       setIsSpeaking(false);
+      setSpeakingMessageId(null);
       addLog('Stopped reading aloud');
       return;
     }
 
+    // If clicking when something else is playing, stop and start new
+    if (isSpeaking && messageId === undefined) {
+      setIsSpeaking(false);
+      setSpeakingMessageId(null);
+      addLog('Stopped reading aloud');
+      return;
+    }
+
+    // Strip markdown formatting for speech
+    const plainText = stripMarkdown(text);
+
     // Create utterance
-    const utterance = new SpeechSynthesisUtterance(text);
+    const utterance = new SpeechSynthesisUtterance(plainText);
     utterance.lang = 'en-US';
     utterance.rate = 1.0;
     utterance.pitch = 1.0;
 
     utterance.onstart = () => {
       setIsSpeaking(true);
+      setSpeakingMessageId(messageId ?? null);
       addLog('Reading answer aloud...');
     };
 
     utterance.onend = () => {
       setIsSpeaking(false);
+      setSpeakingMessageId(null);
       addLog('Finished reading aloud');
     };
 
     utterance.onerror = (event) => {
       console.error('Speech synthesis error:', event);
       setIsSpeaking(false);
+      setSpeakingMessageId(null);
       addLog(`Text-to-speech error: ${event.error}`);
     };
 
@@ -517,7 +585,7 @@ export default function Dashboard() {
     <div className="flex h-screen bg-background">
       {/* Toast notifications */}
       <ToastContainer messages={toastMessages} onClose={closeToast} />
-      
+
       {/* Main content */}
       <main className="flex-1 overflow-y-auto">
         <div className="max-w-4xl mx-auto p-8">
@@ -525,7 +593,7 @@ export default function Dashboard() {
           <header className="relative text-center mb-12">
             {/* User Account Button - positioned in top right */}
             <div className="absolute top-0 right-0">
-              <UserButton 
+              <UserButton
                 appearance={{
                   elements: {
                     avatarBox: "w-10 h-10"
@@ -533,7 +601,7 @@ export default function Dashboard() {
                 }}
               />
             </div>
-            
+
             <Link href="/" className="inline-block">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
@@ -549,332 +617,40 @@ export default function Dashboard() {
             </p>
           </header>
 
-        {/* Upload Section */}
-        <section className="bg-surface rounded-xl p-6 mb-8 shadow-sm">
-          <h2 className="text-xl font-semibold text-ink mb-4">
-            📚 Upload Study Materials
-          </h2>
-          
-          {/* Upload Mode Tabs */}
-          <div className="flex gap-2 mb-4 border-b border-ink/10">
-            <button
-              onClick={() => setUploadMode("files")}
-              className={`px-4 py-2 font-medium transition-colors ${
-                uploadMode === "files"
-                  ? "text-accent border-b-2 border-accent"
-                  : "text-ink/60 hover:text-ink"
-              }`}
-            >
-              📄 Files
-            </button>
-            <button
-              onClick={() => setUploadMode("link")}
-              className={`px-4 py-2 font-medium transition-colors ${
-                uploadMode === "link"
-                  ? "text-accent border-b-2 border-accent"
-                  : "text-ink/60 hover:text-ink"
-              }`}
-            >
-              🔗 Link
-            </button>
-          </div>
-
-          <div className="flex flex-col gap-4">
-            {uploadMode === "files" ? (
-              <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-accent/50 rounded-lg cursor-pointer hover:bg-accent/5 transition-colors">
-                <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                  <svg
-                    className="w-8 h-8 mb-2 text-accent"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
-                    />
-                  </svg>
-                  <p className="text-sm text-ink/70">
-                    <span className="font-semibold text-accent">Click to upload</span>{" "}
-                    or drag and drop
-                  </p>
-                  <p className="text-xs text-ink/50">PDF or TXT files</p>
-                </div>
-                <input
-                  type="file"
-                  className="hidden"
-                  accept=".pdf,.txt"
-                  multiple
-                  onChange={handleFileUpload}
-                />
-              </label>
-            ) : (
-              <form onSubmit={handleLinkUpload} className="flex flex-col gap-3">
-                <div className="flex gap-3">
-                  <input
-                    type="url"
-                    value={linkUrl}
-                    onChange={(e) => setLinkUrl(e.target.value)}
-                    placeholder="Enter YouTube URL or educational website link..."
-                    className="flex-1 px-4 py-3 rounded-lg border border-ink/20 bg-background focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent text-ink placeholder:text-ink/40"
-                  />
-                  <button
-                    type="submit"
-                    disabled={uploadStatus.status === "uploading" || !linkUrl.trim()}
-                    className="px-6 py-3 bg-accent text-white font-semibold rounded-lg hover:bg-accent/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  >
-                    {uploadStatus.status === "uploading" ? "Processing..." : "Add"}
-                  </button>
-                </div>
-                <p className="text-xs text-ink/50">
-                  Supports YouTube videos and educational websites (Wikipedia, blog posts, etc.)
-                </p>
-              </form>
-            )}
-
-            {uploadStatus.status !== "idle" && (
-              <div
-                className={`p-3 rounded-lg text-sm ${
-                  uploadStatus.status === "success"
-                    ? "bg-green-100 text-green-800"
-                    : uploadStatus.status === "error"
-                    ? "bg-red-100 text-red-800"
-                    : "bg-accent/10 text-accent"
-                }`}
-              >
-                {uploadStatus.status === "uploading" && "⏳ "}
-                {uploadStatus.status === "processing" && "⚙️ "}
-                {uploadStatus.status === "success" && "✅ "}
-                {uploadStatus.status === "error" && "❌ "}
-                {uploadStatus.message}
-                {uploadStatus.documentsCount && (
-                  <span className="ml-2">
-                    ({uploadStatus.documentsCount} chunks indexed)
-                  </span>
-                )}
-              </div>
-            )}
-          </div>
-        </section>
-
-        {/* Study Mode Selector */}
-        <section className="bg-surface rounded-xl p-6 mb-8 shadow-sm">
-          <h2 className="text-xl font-semibold text-ink mb-4">
-            🎯 Study Mode
-          </h2>
-          <div className="flex gap-3 mb-6">
-            <button
-              onClick={() => setStudyMode("query")}
-              className={`flex-1 px-4 py-3 rounded-lg font-medium transition-colors ${
-                studyMode === "query"
-                  ? "bg-accent text-white"
-                  : "bg-background text-ink border border-ink/20 hover:border-accent/50"
-              }`}
-            >
-              🔍 Q&A Mode
-            </button>
-            <button
-              onClick={() => setStudyMode("flashcards")}
-              className={`flex-1 px-4 py-3 rounded-lg font-medium transition-colors ${
-                studyMode === "flashcards"
-                  ? "bg-accent text-white"
-                  : "bg-background text-ink border border-ink/20 hover:border-accent/50"
-              }`}
-            >
-              🗂️ Flashcards
-            </button>
-            <button
-              onClick={() => setStudyMode("quiz")}
-              className={`flex-1 px-4 py-3 rounded-lg font-medium transition-colors ${
-                studyMode === "quiz"
-                  ? "bg-accent text-white"
-                  : "bg-background text-ink border border-ink/20 hover:border-accent/50"
-              }`}
-            >
-              📝 Quiz Mode
-            </button>
-            <button
-              onClick={() => setStudyMode("documents")}
-              className={`flex-1 px-4 py-3 rounded-lg font-medium transition-colors ${
-                studyMode === "documents"
-                  ? "bg-accent text-white"
-                  : "bg-background text-ink border border-ink/20 hover:border-accent/50"
-              }`}
-            >
-              📚 Documents
-            </button>
-          </div>
-
-          {/* Generate Study Tools */}
-          {(studyMode === "flashcards" || studyMode === "quiz") && (
-            <div className="space-y-4">
-              <form onSubmit={handleGenerateTools} className="flex gap-3">
-                <input
-                  type="text"
-                  value={studyTopic}
-                  onChange={(e) => setStudyTopic(e.target.value)}
-                  placeholder="Enter a topic to generate study tools..."
-                  className="flex-1 px-4 py-3 rounded-lg border border-ink/20 bg-background focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent text-ink placeholder:text-ink/40"
-                />
-                <button
-                  type="submit"
-                  disabled={isGenerating || !studyTopic.trim()}
-                  className="px-6 py-3 bg-accent text-white font-semibold rounded-lg hover:bg-accent/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  {isGenerating ? "Generating..." : "Generate"}
-                </button>
-              </form>
-
-              {generationStatus && (
-                <div
-                  className={`p-3 rounded-lg text-sm ${
-                    generationStatus.includes("Error")
-                      ? "bg-red-100 text-red-800"
-                      : "bg-green-100 text-green-800"
-                  }`}
-                >
-                  {generationStatus}
-                </div>
-              )}
-            </div>
-          )}
-        </section>
-
-        {/* Query Section - shown when in Q&A mode */}
-        {studyMode === "query" && (
+          {/* Upload Section */}
           <section className="bg-surface rounded-xl p-6 mb-8 shadow-sm">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold text-ink">
-                🔍 Ask a Question
-              </h2>
-              <div className="flex items-center gap-3">
-                {/* Hands-Free Mode Toggle */}
-                <button
-                  onClick={toggleHandsFreeMode}
-                  className={`flex items-center gap-2 px-3 py-1 text-sm rounded-lg transition-colors ${
-                    isHandsFreeModeEnabled
-                      ? 'bg-accent text-white'
-                      : 'bg-accent/10 text-accent hover:bg-accent/20'
-                  }`}
-                  title="Auto-read answers aloud"
-                >
-                  <svg
-                    className="w-4 h-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"
-                    />
-                  </svg>
-                  Hands-Free
-                </button>
-                {currentSessionId && (
-                  <button
-                    onClick={handleNewChat}
-                    className="px-3 py-1 text-sm bg-accent/10 text-accent rounded-lg hover:bg-accent/20 transition-colors"
-                  >
-                    + New Chat
-                  </button>
-                )}
-              </div>
-            </div>
-            <form onSubmit={handleQuery} className="flex gap-3">
-              <input
-                type="text"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Enter your study question..."
-                className="flex-1 px-4 py-3 rounded-lg border border-ink/20 bg-background focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent text-ink placeholder:text-ink/40"
-              />
+            <h2 className="text-xl font-semibold text-ink mb-4">
+              📚 Upload Study Materials
+            </h2>
+
+            {/* Upload Mode Tabs */}
+            <div className="flex gap-2 mb-4 border-b border-ink/10">
               <button
-                type="button"
-                onClick={toggleVoiceInput}
-                className={`px-4 py-3 rounded-lg font-semibold transition-colors ${
-                  isListening
-                    ? 'bg-red-500 text-white hover:bg-red-600 animate-pulse'
-                    : 'bg-accent/10 text-accent hover:bg-accent/20'
-                }`}
-                title={isListening ? "Stop listening" : "Voice input"}
+                onClick={() => setUploadMode("files")}
+                className={`px-4 py-2 font-medium transition-colors ${uploadMode === "files"
+                    ? "text-accent border-b-2 border-accent"
+                    : "text-ink/60 hover:text-ink"
+                  }`}
               >
-                <svg
-                  className="w-5 h-5"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"
-                  />
-                </svg>
+                📄 Files
               </button>
               <button
-                type="submit"
-                disabled={isQuerying || !query.trim()}
-                className="px-6 py-3 bg-accent text-white font-semibold rounded-lg hover:bg-accent/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                onClick={() => setUploadMode("link")}
+                className={`px-4 py-2 font-medium transition-colors ${uploadMode === "link"
+                    ? "text-accent border-b-2 border-accent"
+                    : "text-ink/60 hover:text-ink"
+                  }`}
               >
-                {isQuerying ? "Querying..." : "Ask"}
+                🔗 Link
               </button>
-            </form>
-          </section>
-        )}
+            </div>
 
-        {/* Flashcard Viewer - shown when in flashcard mode */}
-        {studyMode === "flashcards" && (
-          <section className="bg-surface rounded-xl p-6 mb-8 shadow-sm">
-            <h2 className="text-xl font-semibold text-ink mb-6">
-              🗂️ Flashcards
-            </h2>
-            <FlashcardViewer flashcards={flashcards} />
-          </section>
-        )}
-
-        {/* Quiz Viewer - shown when in quiz mode */}
-        {studyMode === "quiz" && (
-          <section className="bg-surface rounded-xl p-6 mb-8 shadow-sm">
-            <h2 className="text-xl font-semibold text-ink mb-6">
-              📝 Quiz
-            </h2>
-            <QuizViewer quizzes={quizzes} />
-          </section>
-        )}
-
-        {/* Document List - shown when in documents mode */}
-        {studyMode === "documents" && (
-          <section className="bg-surface rounded-xl p-6 mb-8 shadow-sm">
-            <h2 className="text-xl font-semibold text-ink mb-6">
-              📚 Manage Documents
-            </h2>
-            <DocumentList onUpdate={() => addLog("Document list updated")} />
-          </section>
-        )}
-
-        {/* Response Section */}
-        {studyMode === "query" && response && (
-          <section className="bg-surface rounded-xl p-6 mb-8 shadow-sm">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold text-ink">💡 Answer</h2>
-              <button
-                onClick={() => readAloud(response.answer)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
-                  isSpeaking
-                    ? 'bg-red-500 text-white hover:bg-red-600'
-                    : 'bg-accent text-white hover:bg-accent/90'
-                }`}
-              >
-                {isSpeaking ? (
-                  <>
+            <div className="flex flex-col gap-4">
+              {uploadMode === "files" ? (
+                <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-accent/50 rounded-lg cursor-pointer hover:bg-accent/5 transition-colors">
+                  <div className="flex flex-col items-center justify-center pt-5 pb-6">
                     <svg
-                      className="w-5 h-5"
+                      className="w-8 h-8 mb-2 text-accent"
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"
@@ -883,21 +659,168 @@ export default function Dashboard() {
                         strokeLinecap="round"
                         strokeLinejoin="round"
                         strokeWidth={2}
-                        d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                      />
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M9 10h6v4H9z"
+                        d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
                       />
                     </svg>
-                    Stop Reading
-                  </>
-                ) : (
-                  <>
+                    <p className="text-sm text-ink/70">
+                      <span className="font-semibold text-accent">Click to upload</span>{" "}
+                      or drag and drop
+                    </p>
+                    <p className="text-xs text-ink/50">PDF or TXT files</p>
+                  </div>
+                  <input
+                    type="file"
+                    className="hidden"
+                    accept=".pdf,.txt"
+                    multiple
+                    onChange={handleFileUpload}
+                  />
+                </label>
+              ) : (
+                <form onSubmit={handleLinkUpload} className="flex flex-col gap-3">
+                  <div className="flex gap-3">
+                    <input
+                      type="url"
+                      value={linkUrl}
+                      onChange={(e) => setLinkUrl(e.target.value)}
+                      placeholder="Enter YouTube URL or educational website link..."
+                      className="flex-1 px-4 py-3 rounded-lg border border-ink/20 bg-background focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent text-ink placeholder:text-ink/40"
+                    />
+                    <button
+                      type="submit"
+                      disabled={uploadStatus.status === "uploading" || !linkUrl.trim()}
+                      className="px-6 py-3 bg-accent text-white font-semibold rounded-lg hover:bg-accent/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      {uploadStatus.status === "uploading" ? "Processing..." : "Add"}
+                    </button>
+                  </div>
+                  <p className="text-xs text-ink/50">
+                    Supports YouTube videos and educational websites (Wikipedia, blog posts, etc.)
+                  </p>
+                </form>
+              )}
+
+              {uploadStatus.status !== "idle" && (
+                <div
+                  className={`p-3 rounded-lg text-sm ${uploadStatus.status === "success"
+                      ? "bg-green-100 text-green-800"
+                      : uploadStatus.status === "error"
+                        ? "bg-red-100 text-red-800"
+                        : "bg-accent/10 text-accent"
+                    }`}
+                >
+                  {uploadStatus.status === "uploading" && "⏳ "}
+                  {uploadStatus.status === "processing" && "⚙️ "}
+                  {uploadStatus.status === "success" && "✅ "}
+                  {uploadStatus.status === "error" && "❌ "}
+                  {uploadStatus.message}
+                  {uploadStatus.documentsCount && (
+                    <span className="ml-2">
+                      ({uploadStatus.documentsCount} chunks indexed)
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+          </section>
+
+          {/* Study Mode Selector */}
+          <section className="bg-surface rounded-xl p-6 mb-8 shadow-sm">
+            <h2 className="text-xl font-semibold text-ink mb-4">
+              🎯 Study Mode
+            </h2>
+            <div className="flex gap-3 mb-6">
+              <button
+                onClick={() => setStudyMode("query")}
+                className={`flex-1 px-4 py-3 rounded-lg font-medium transition-colors ${studyMode === "query"
+                    ? "bg-accent text-white"
+                    : "bg-background text-ink border border-ink/20 hover:border-accent/50"
+                  }`}
+              >
+                🔍 Q&A Mode
+              </button>
+              <button
+                onClick={() => setStudyMode("flashcards")}
+                className={`flex-1 px-4 py-3 rounded-lg font-medium transition-colors ${studyMode === "flashcards"
+                    ? "bg-accent text-white"
+                    : "bg-background text-ink border border-ink/20 hover:border-accent/50"
+                  }`}
+              >
+                🗂️ Flashcards
+              </button>
+              <button
+                onClick={() => setStudyMode("quiz")}
+                className={`flex-1 px-4 py-3 rounded-lg font-medium transition-colors ${studyMode === "quiz"
+                    ? "bg-accent text-white"
+                    : "bg-background text-ink border border-ink/20 hover:border-accent/50"
+                  }`}
+              >
+                📝 Quiz Mode
+              </button>
+              <button
+                onClick={() => setStudyMode("documents")}
+                className={`flex-1 px-4 py-3 rounded-lg font-medium transition-colors ${studyMode === "documents"
+                    ? "bg-accent text-white"
+                    : "bg-background text-ink border border-ink/20 hover:border-accent/50"
+                  }`}
+              >
+                📚 Documents
+              </button>
+            </div>
+
+            {/* Generate Study Tools */}
+            {(studyMode === "flashcards" || studyMode === "quiz") && (
+              <div className="space-y-4">
+                <form onSubmit={handleGenerateTools} className="flex gap-3">
+                  <input
+                    type="text"
+                    value={studyTopic}
+                    onChange={(e) => setStudyTopic(e.target.value)}
+                    placeholder="Enter a topic to generate study tools..."
+                    className="flex-1 px-4 py-3 rounded-lg border border-ink/20 bg-background focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent text-ink placeholder:text-ink/40"
+                  />
+                  <button
+                    type="submit"
+                    disabled={isGenerating || !studyTopic.trim()}
+                    className="px-6 py-3 bg-accent text-white font-semibold rounded-lg hover:bg-accent/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {isGenerating ? "Generating..." : "Generate"}
+                  </button>
+                </form>
+
+                {generationStatus && (
+                  <div
+                    className={`p-3 rounded-lg text-sm ${generationStatus.includes("Error")
+                        ? "bg-red-100 text-red-800"
+                        : "bg-green-100 text-green-800"
+                      }`}
+                  >
+                    {generationStatus}
+                  </div>
+                )}
+              </div>
+            )}
+          </section>
+
+          {/* Query Section - shown when in Q&A mode */}
+          {studyMode === "query" && (
+            <section className="bg-surface rounded-xl p-6 mb-8 shadow-sm">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-semibold text-ink">
+                  🔍 Ask a Question
+                </h2>
+                <div className="flex items-center gap-3">
+                  {/* Hands-Free Mode Toggle */}
+                  <button
+                    onClick={toggleHandsFreeMode}
+                    className={`flex items-center gap-2 px-3 py-1 text-sm rounded-lg transition-colors ${isHandsFreeModeEnabled
+                        ? 'bg-accent text-white'
+                        : 'bg-accent/10 text-accent hover:bg-accent/20'
+                      }`}
+                    title="Auto-read answers aloud"
+                  >
                     <svg
-                      className="w-5 h-5"
+                      className="w-4 h-4"
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"
@@ -909,86 +832,319 @@ export default function Dashboard() {
                         d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"
                       />
                     </svg>
-                    Read Aloud
-                  </>
-                )}
-              </button>
-              {response.confidenceScore !== undefined && (
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-ink/60">Confidence:</span>
-                  <div className={`px-3 py-1 rounded-full font-semibold text-sm ${
-                    response.confidenceScore >= 80 ? 'bg-green-100 text-green-800' :
-                    response.confidenceScore >= 60 ? 'bg-yellow-100 text-yellow-800' :
-                    'bg-red-100 text-red-800'
-                  }`}>
-                    {response.confidenceScore}%
+                    Hands-Free
+                  </button>
+                  {currentSessionId && (
+                    <button
+                      onClick={handleNewChat}
+                      className="px-3 py-1 text-sm bg-accent/10 text-accent rounded-lg hover:bg-accent/20 transition-colors"
+                    >
+                      + New Chat
+                    </button>
+                  )}
+                </div>
+              </div>
+              <form onSubmit={handleQuery} className="flex gap-3">
+                <input
+                  type="text"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Enter your study question..."
+                  className="flex-1 px-4 py-3 rounded-lg border border-ink/20 bg-background focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent text-ink placeholder:text-ink/40"
+                />
+                <button
+                  type="button"
+                  onClick={toggleVoiceInput}
+                  className={`px-4 py-3 rounded-lg font-semibold transition-colors ${isListening
+                      ? 'bg-red-500 text-white hover:bg-red-600 animate-pulse'
+                      : 'bg-accent/10 text-accent hover:bg-accent/20'
+                    }`}
+                  title={isListening ? "Stop listening" : "Voice input"}
+                >
+                  <svg
+                    className="w-5 h-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"
+                    />
+                  </svg>
+                </button>
+                <button
+                  type="submit"
+                  disabled={isQuerying || !query.trim()}
+                  className="px-6 py-3 bg-accent text-white font-semibold rounded-lg hover:bg-accent/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {isQuerying ? "Querying..." : "Ask"}
+                </button>
+              </form>
+            </section>
+          )}
+
+          {/* Flashcard Viewer - shown when in flashcard mode */}
+          {studyMode === "flashcards" && (
+            <section className="bg-surface rounded-xl p-6 mb-8 shadow-sm">
+              <h2 className="text-xl font-semibold text-ink mb-6">
+                🗂️ Flashcards
+              </h2>
+              <FlashcardViewer flashcards={flashcards} />
+            </section>
+          )}
+
+          {/* Quiz Viewer - shown when in quiz mode */}
+          {studyMode === "quiz" && (
+            <section className="bg-surface rounded-xl p-6 mb-8 shadow-sm">
+              <h2 className="text-xl font-semibold text-ink mb-6">
+                📝 Quiz
+              </h2>
+              <QuizViewer quizzes={quizzes} />
+            </section>
+          )}
+
+          {/* Document List - shown when in documents mode */}
+          {studyMode === "documents" && (
+            <section className="bg-surface rounded-xl p-6 mb-8 shadow-sm">
+              <h2 className="text-xl font-semibold text-ink mb-6">
+                📚 Manage Documents
+              </h2>
+              <DocumentList onUpdate={() => addLog("Document list updated")} />
+            </section>
+          )}
+
+          {/* Response Section */}
+          {studyMode === "query" && response && (
+            <section className="bg-surface rounded-xl p-6 mb-8 shadow-sm">
+              {/* Show full conversation if a session is selected */}
+              {selectedSession && chatMessages.length > 1 && (
+                <div className="mb-6">
+                  <h2 className="text-xl font-semibold mb-4">Conversation History</h2>
+                  <div className="space-y-4 max-h-96 overflow-y-auto">
+                    {chatMessages.map((message, index) => (
+                      <div
+                        key={index}
+                        className={`p-4 rounded-lg ${message.role === "user"
+                            ? "bg-accent/10 border-l-4 border-accent"
+                            : "bg-background border-l-4 border-ink/20"
+                          }`}
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-sm">
+                              {message.role === "user" ? "👤 You" : "🤖 AI Assistant"}
+                            </span>
+                            <span className="text-xs text-ink/50">
+                              {new Date(message.createdAt).toLocaleString()}
+                            </span>
+                          </div>
+                          {message.role === "assistant" && (
+                            <button
+                              onClick={() => readAloud(message.content, message.id)}
+                              className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-medium transition-colors ${isSpeaking && speakingMessageId === message.id
+                                  ? 'bg-red-500 text-white hover:bg-red-600'
+                                  : 'bg-accent/10 text-accent hover:bg-accent/20'
+                                }`}
+                              title={isSpeaking && speakingMessageId === message.id ? "Stop reading" : "Read aloud"}
+                            >
+                              {isSpeaking && speakingMessageId === message.id ? (
+                                <>
+                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 10h6v4H9z" />
+                                  </svg>
+                                  Stop
+                                </>
+                              ) : (
+                                <>
+                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                                  </svg>
+                                  Play
+                                </>
+                              )}
+                            </button>
+                          )}
+                        </div>
+                        {message.role === "user" ? (
+                          <p className="text-ink whitespace-pre-wrap">{message.content}</p>
+                        ) : (
+                          <div className="prose prose-sm max-w-none">
+                            <ReactMarkdown
+                              remarkPlugins={[remarkGfm]}
+                              rehypePlugins={[rehypeRaw]}
+                              components={{
+                                p: ({ children }) => <p className="whitespace-pre-wrap text-sm">{children}</p>,
+                                code: ({ className, children, ...props }) => {
+                                  const isInline = !className;
+                                  return isInline ? (
+                                    <code className="whitespace-pre-wrap text-xs" {...props}>{children}</code>
+                                  ) : (
+                                    <code className={className} {...props}>{children}</code>
+                                  );
+                                }
+                              }}
+                            >
+                              {message.content}
+                            </ReactMarkdown>
+                          </div>
+                        )}
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}
-            </div>
-            <div className="prose prose-sm max-w-none">
-              <p className="text-ink whitespace-pre-wrap">{response.answer}</p>
-            </div>
 
-            {response.sources && response.sources.length > 0 && (
-              <div className="mt-6">
-                <h3 className="text-lg font-medium text-ink mb-3">
-                  📄 Referenced Sources
-                </h3>
-                <div className="space-y-3">
-                  {response.sources.map((source, index) => (
-                    <div
-                      key={index}
-                      className="p-3 bg-background rounded-lg border border-ink/10"
+              {/* Only show current answer section if no conversation history or single message */}
+              {(!selectedSession || chatMessages.length <= 1) && (
+                <>
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-xl font-semibold text-ink">💡 Answer</h2>
+                    <button
+                      onClick={() => readAloud(response.answer)}
+                      className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${isSpeaking
+                          ? 'bg-red-500 text-white hover:bg-red-600'
+                          : 'bg-accent text-white hover:bg-accent/90'
+                        }`}
                     >
-                      {source.isVisual && (
-                        <div className="mb-2 inline-flex items-center gap-1 px-2 py-1 bg-accent/10 text-accent text-xs font-semibold rounded">
-                          🖼️ Visual Description
-                        </div>
+                      {isSpeaking ? (
+                        <>
+                          <svg
+                            className="w-5 h-5"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                            />
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M9 10h6v4H9z"
+                            />
+                          </svg>
+                          Stop Reading
+                        </>
+                      ) : (
+                        <>
+                          <svg
+                            className="w-5 h-5"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"
+                            />
+                          </svg>
+                          Read Aloud
+                        </>
                       )}
-                      <p className="text-sm text-ink/80">{source.text}</p>
-                      <div className="flex gap-4 mt-1">
-                        {source.relevanceScore !== undefined && (
-                          <p className="text-xs text-ink/50">
-                            AI Relevance: {source.relevanceScore.toFixed(0)}%
-                          </p>
-                        )}
-                        <p className="text-xs text-ink/50">
-                          Similarity: {(source.score * 100).toFixed(1)}%
-                        </p>
+                    </button>
+                    {response.confidenceScore !== undefined && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-ink/60">Confidence:</span>
+                        <div className={`px-3 py-1 rounded-full font-semibold text-sm ${response.confidenceScore >= 80 ? 'bg-green-100 text-green-800' :
+                            response.confidenceScore >= 60 ? 'bg-yellow-100 text-yellow-800' :
+                              'bg-red-100 text-red-800'
+                          }`}>
+                          {response.confidenceScore}%
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  <div className="prose max-w-none">
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm]}
+                      rehypePlugins={[rehypeRaw]}
+                      components={{
+                        p: ({ children }) => <p className="whitespace-pre-wrap">{children}</p>,
+                        code: ({ className, children, ...props }) => {
+                          const isInline = !className;
+                          return isInline ? (
+                            <code className="whitespace-pre-wrap" {...props}>{children}</code>
+                          ) : (
+                            <code className={className} {...props}>{children}</code>
+                          );
+                        }
+                      }}
+                    >
+                      {response.answer}
+                    </ReactMarkdown>
+                  </div>
+
+                  {response.sources && response.sources.length > 0 && (
+                    <div className="mt-6">
+                      <h3 className="text-lg font-medium text-ink mb-3">
+                        📄 Referenced Sources
+                      </h3>
+                      <div className="space-y-3">
+                        {response.sources.map((source, index) => (
+                          <div
+                            key={index}
+                            className="p-3 bg-background rounded-lg border border-ink/10"
+                          >
+                            {source.isVisual && (
+                              <div className="mb-2 inline-flex items-center gap-1 px-2 py-1 bg-accent/10 text-accent text-xs font-semibold rounded">
+                                🖼️ Visual Description
+                              </div>
+                            )}
+                            <p className="text-sm text-ink/80">{source.text}</p>
+                            <div className="flex gap-4 mt-1">
+                              {source.relevanceScore !== undefined && (
+                                <p className="text-xs text-ink/50">
+                                  AI Relevance: {source.relevanceScore.toFixed(0)}%
+                                </p>
+                              )}
+                              <p className="text-xs text-ink/50">
+                                Similarity: {(source.score * 100).toFixed(1)}%
+                              </p>
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     </div>
-                  ))}
-                </div>
-              </div>
-            )}
+                  )}
+                </>
+              )}
+            </section>
+          )}
+
+          {/* Log Panel */}
+          <section className="bg-surface rounded-xl p-6 shadow-sm">
+            <h2 className="text-xl font-semibold text-ink mb-4">
+              📋 Activity Log
+            </h2>
+            <div className="bg-ink/5 rounded-lg p-4 h-48 overflow-y-auto font-mono text-xs">
+              {logs.length === 0 ? (
+                <p className="text-ink/40">No activity yet...</p>
+              ) : (
+                logs.map((log, index) => (
+                  <p key={index} className="text-ink/70 mb-1">
+                    {log}
+                  </p>
+                ))
+              )}
+            </div>
           </section>
-        )}
 
-        {/* Log Panel */}
-        <section className="bg-surface rounded-xl p-6 shadow-sm">
-          <h2 className="text-xl font-semibold text-ink mb-4">
-            📋 Activity Log
-          </h2>
-          <div className="bg-ink/5 rounded-lg p-4 h-48 overflow-y-auto font-mono text-xs">
-            {logs.length === 0 ? (
-              <p className="text-ink/40">No activity yet...</p>
-            ) : (
-              logs.map((log, index) => (
-                <p key={index} className="text-ink/70 mb-1">
-                  {log}
-                </p>
-              ))
-            )}
-          </div>
-        </section>
-
-        {/* Footer */}
-        <footer className="text-center mt-8 text-sm text-ink/50">
-          <p>
-            Powered by LlamaIndex + PGVector + Gemini 2.5 Flash
-          </p>
-        </footer>
+          {/* Footer */}
+          <footer className="text-center mt-8 text-sm text-ink/50">
+            <p>
+              Powered by LlamaIndex + PGVector + Gemini 2.5 Flash
+            </p>
+          </footer>
         </div>
       </main>
 

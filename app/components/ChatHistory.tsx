@@ -42,8 +42,11 @@ export default function ChatHistory({ onSessionSelect, onHistoryUpdate, selected
       setIsLoading(true);
       const res = await fetch("/api/chat-sessions");
       if (res.ok) {
-        const data = await res.json();
-        setSessions(data.sessions || []);
+        const response = await res.json();
+        // API returns { success: true, data: { sessions: [...] } }
+        setSessions(response.data?.sessions || []);
+      } else {
+        console.error("Failed to load sessions:", res.statusText);
       }
     } catch (error) {
       console.error("Failed to load chat sessions:", error);
@@ -68,8 +71,8 @@ export default function ChatHistory({ onSessionSelect, onHistoryUpdate, selected
         await loadSessions();
         onHistoryUpdate();
       } else {
-        const data = await res.json();
-        alert(`Failed to clear history: ${data.error}`);
+        const response = await res.json();
+        alert(`Failed to clear history: ${response.error?.message || "Unknown error"}`);
       }
     } catch (error) {
       console.error("Failed to clear history:", error);
@@ -84,12 +87,13 @@ export default function ChatHistory({ onSessionSelect, onHistoryUpdate, selected
       // Fetch full session with messages
       const res = await fetch(`/api/chat-sessions/${session.id}`);
       if (res.ok) {
-        const data = await res.json();
-        onSessionSelect(data.session);
+        const response = await res.json();
+        // API returns { success: true, data: { session: {...} } }
+        onSessionSelect(response.data?.session);
         setIsOpen(false);
       } else {
-        const data = await res.json();
-        alert(`Failed to load session: ${data.error || "Unknown error"}`);
+        const response = await res.json();
+        alert(`Failed to load session: ${response.error?.message || "Unknown error"}`);
       }
     } catch (error) {
       console.error("Failed to load session:", error);
@@ -222,10 +226,9 @@ export default function ChatHistory({ onSessionSelect, onHistoryUpdate, selected
                   onClick={() => handleSessionClick(session)}
                   className={`
                     w-full text-left p-3 rounded-lg transition-colors
-                    ${
-                      selectedSessionId === session.id
-                        ? "bg-accent/10 border border-accent/30"
-                        : "bg-background hover:bg-accent/5 border border-transparent"
+                    ${selectedSessionId === session.id
+                      ? "bg-accent/10 border border-accent/30"
+                      : "bg-background hover:bg-accent/5 border border-transparent"
                     }
                   `}
                 >
