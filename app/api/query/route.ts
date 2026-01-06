@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { requireAuth, isAuthSuccess } from "@/lib/middleware/auth-middleware";
 import { ErrorHandler } from "@/lib/utils/error-handler";
 import { ApiResponseBuilder } from "@/lib/utils/api-response";
+import { sourcesToJson, SourceDocument } from "@/lib/types/api-types";
 import { hybridSearch, initializeDatabase, getPrisma } from "@/lib/db";
 import { generateEmbedding, generateResponse, rerankDocuments } from "@/lib/rag";
 
@@ -71,8 +72,8 @@ export async function POST(request: NextRequest) {
       : 0;
     const confidenceScore = Math.round(avgRelevance);
 
-    // Prepare sources for response
-    const sources = topDocs.map((doc) => ({
+    // Prepare sources for response with proper typing
+    const sources: SourceDocument[] = topDocs.map((doc) => ({
       text: doc.content.substring(0, 200) + (doc.content.length > 200 ? "..." : ""),
       score: doc.score,
       relevanceScore: doc.relevanceScore,
@@ -107,13 +108,13 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Save assistant's answer
+    // Save assistant's answer with properly typed sources
     await db.chatMessage.create({
       data: {
         sessionId: currentSessionId,
         role: "assistant",
         content: answer,
-        sources: sources as any,
+        sources: sourcesToJson(sources),
       },
     });
 

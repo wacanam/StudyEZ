@@ -68,7 +68,9 @@ app/api/                       # Next.js API routes
 ### TypeScript
 - **Always** use TypeScript, never plain JavaScript
 - **Always** define explicit types for function parameters and return values
+- **NEVER** use the `any` type - use proper type definitions instead
 - Use interfaces for data structures
+- Use type guards for runtime type checking
 - Enable strict mode (already configured)
 
 ### Services Pattern
@@ -255,6 +257,29 @@ const data = AIResponseParser.safeParseJSON<MyType>(responseText, fallback);
 
 ## Common Tasks
 
+### Working with Types
+- Define interfaces in `lib/types/` for data structures
+- Use type guards for runtime validation
+- Never use `any` - use `unknown` with type guards if needed
+- For Prisma JSON fields, use helper functions like `sourcesToJson()`
+- Example:
+  ```typescript
+  // Define interface
+  export interface MyData {
+    field: string;
+  }
+  
+  // Type guard
+  function isMyData(obj: unknown): obj is MyData {
+    return typeof obj === 'object' && obj !== null && 'field' in obj;
+  }
+  
+  // Use in code
+  if (isMyData(data)) {
+    // TypeScript knows data is MyData here
+  }
+  ```
+
 ### Adding a New API Endpoint
 1. Create route file in `app/api/your-endpoint/route.ts`
 2. Import required middleware and services
@@ -304,6 +329,8 @@ const data = AIResponseParser.safeParseJSON<MyType>(responseText, fallback);
 - Access environment variables directly (except in client manager)
 - Duplicate JSON parsing logic for AI responses
 - Create services without exporting singleton instances
+- **Use the `any` type - always use proper TypeScript types**
+- Use type assertions (`as any`) - use type guards instead
 
 ✅ **DO**:
 - Use `getAIClient()` for AI operations
