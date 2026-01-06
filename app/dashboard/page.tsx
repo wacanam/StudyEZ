@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
+import { UserButton } from "@clerk/nextjs";
 import FlashcardViewer from "@/app/components/FlashcardViewer";
 import QuizViewer from "@/app/components/QuizViewer";
 import ChatHistory from "@/app/components/ChatHistory";
@@ -521,7 +522,18 @@ export default function Dashboard() {
       <main className="flex-1 overflow-y-auto">
         <div className="max-w-4xl mx-auto p-8">
           {/* Header with Logo */}
-          <header className="text-center mb-12">
+          <header className="relative text-center mb-12">
+            {/* User Account Button - positioned in top right */}
+            <div className="absolute top-0 right-0">
+              <UserButton 
+                appearance={{
+                  elements: {
+                    avatarBox: "w-10 h-10"
+                  }
+                }}
+              />
+            </div>
+            
             <Link href="/" className="inline-block">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
