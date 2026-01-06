@@ -23,9 +23,9 @@ export class ErrorHandler {
   }
 
   /**
-   * Handle async route errors with consistent formatting
+   * Handle route errors with consistent formatting
    */
-  static async handleRouteError(
+  static handleRouteError(
     error: unknown,
     context: string
   ) {

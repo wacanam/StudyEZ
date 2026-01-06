@@ -18,8 +18,9 @@ export interface SourceDocument {
 
 /**
  * Type guard to check if an object is a valid SourceDocument
+ * Exported for reusability across modules
  */
-function isSourceDocument(obj: unknown): obj is SourceDocument {
+export function isSourceDocument(obj: unknown): obj is SourceDocument {
   return (
     typeof obj === 'object' &&
     obj !== null &&
@@ -33,11 +34,10 @@ function isSourceDocument(obj: unknown): obj is SourceDocument {
 
 /**
  * Helper to convert SourceDocument array to Prisma JSON
- * Uses JSON serialization to ensure type compatibility
+ * Direct cast is safe as SourceDocument structure is JSON-compatible
  */
 export function sourcesToJson(sources: SourceDocument[]): Prisma.InputJsonValue {
-  // JSON.parse(JSON.stringify()) ensures the object is a valid JSON value
-  return JSON.parse(JSON.stringify(sources)) as Prisma.InputJsonValue;
+  return sources as unknown as Prisma.InputJsonValue;
 }
 
 /**

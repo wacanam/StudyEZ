@@ -98,7 +98,7 @@ Important:
         quizzes: QuizQuestion[];
       }>(responseText);
     } catch (parseError) {
-      console.error("Failed to parse Gemini response:", responseText);
+      console.error("Failed to parse Gemini response:", parseError instanceof Error ? parseError.message : "Parse error");
       return ErrorHandler.createErrorResponse(
         parseError,
         "Failed to parse generated content. Please try again",
