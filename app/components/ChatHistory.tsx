@@ -8,6 +8,7 @@ interface ChatMessage {
     text: string;
     score: number;
     metadata?: Record<string, unknown>;
+    isVisual?: boolean;
   }>;
   createdAt: string;
 }
