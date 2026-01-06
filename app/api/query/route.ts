@@ -80,6 +80,7 @@ export async function POST(request: NextRequest) {
       score: doc.score,
       relevanceScore: doc.relevanceScore,
       metadata: doc.metadata,
+      isVisual: doc.metadata?.chunkType === "visual",
     }));
 
     // Save to database
