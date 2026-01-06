@@ -31,7 +31,8 @@ export class AIResponseParser {
       return this.extractJSON<T>(responseText);
     } catch (error) {
       // Log error without exposing potentially sensitive response text
-      console.error("Failed to parse AI response:", error instanceof Error ? error.message : "Unknown error");
+      const errorMsg = error instanceof Error ? error.message : "Unknown error";
+      console.error(`Failed to parse AI response: ${errorMsg}`);
       return fallback;
     }
   }

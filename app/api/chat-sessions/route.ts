@@ -16,16 +16,34 @@ export async function GET(request: NextRequest) {
 
     const db = getPrisma();
 
-    const sessions = await db.chatSession.findMany({
-      where: { userId },
-      orderBy: { updatedAt: "desc" },
-      include: {
-        messages: {
-          take: 1,
-          orderBy: { createdAt: "asc" },
-        },
-      },
-    });
+    // Fetch with timeout handling
+    let sessions;
+    try {
+      sessions = await Promise.race([
+        db.chatSession.findMany({
+          where: { userId },
+          orderBy: { updatedAt: "desc" },
+          include: {
+            messages: {
+              take: 1,
+              orderBy: { createdAt: "asc" },
+            },
+          },
+        }),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("Database query timeout")), 20000)
+        ),
+      ]);
+    } catch (dbError) {
+      if (dbError instanceof Error && dbError.message === "Database query timeout") {
+        return ErrorHandler.createErrorResponse(
+          dbError,
+          "Database query timed out. Please check your database connection and try again.",
+          503
+        );
+      }
+      throw dbError;
+    }
 
     return ApiResponseBuilder.success({ sessions });
   } catch (error) {

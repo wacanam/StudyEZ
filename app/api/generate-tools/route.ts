@@ -98,7 +98,8 @@ Important:
         quizzes: QuizQuestion[];
       }>(responseText);
     } catch (parseError) {
-      console.error("Failed to parse Gemini response:", parseError instanceof Error ? parseError.message : "Parse error");
+      const parseErrorMsg = parseError instanceof Error ? parseError.message : "Parse error";
+      console.error(`Failed to parse Gemini response: ${parseErrorMsg}`);
       return ErrorHandler.createErrorResponse(
         parseError,
         "Failed to parse generated content. Please try again",
@@ -162,15 +163,39 @@ export async function GET(request: NextRequest) {
 
     const db = getPrisma();
 
-    const flashcards = await db.flashcard.findMany({
-      where: { userId },
-      orderBy: { createdAt: "desc" },
-    });
-
-    const quizzes = await db.quiz.findMany({
-      where: { userId },
-      orderBy: { createdAt: "desc" },
-    });
+    // Fetch with timeout handling
+    let flashcards, quizzes;
+    try {
+      [flashcards, quizzes] = await Promise.all([
+        Promise.race([
+          db.flashcard.findMany({
+            where: { userId },
+            orderBy: { createdAt: "desc" },
+          }),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error("Flashcard query timeout")), 20000)
+          ),
+        ]),
+        Promise.race([
+          db.quiz.findMany({
+            where: { userId },
+            orderBy: { createdAt: "desc" },
+          }),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error("Quiz query timeout")), 20000)
+          ),
+        ]),
+      ]);
+    } catch (dbError) {
+      if (dbError instanceof Error && dbError.message.includes("timeout")) {
+        return ErrorHandler.createErrorResponse(
+          dbError,
+          "Database query timed out. Please check your database connection and try again.",
+          503
+        );
+      }
+      throw dbError;
+    }
 
     return ApiResponseBuilder.success({
       flashcards,

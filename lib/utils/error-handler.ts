@@ -7,6 +7,26 @@ import { ApiResponseBuilder } from "./api-response";
  */
 export class ErrorHandler {
   /**
+   * Safely extract error message from any error type
+   */
+  private static getErrorMessage(error: unknown): string {
+    if (error instanceof Error) {
+      return error.message;
+    }
+    if (typeof error === 'string') {
+      return error;
+    }
+    if (typeof error === 'object' && error !== null) {
+      try {
+        return JSON.stringify(error);
+      } catch {
+        return 'Unknown object error';
+      }
+    }
+    return String(error) || 'Unknown error';
+  }
+
+  /**
    * Create a standardized error response
    */
   static createErrorResponse(
@@ -14,10 +34,10 @@ export class ErrorHandler {
     context: string,
     status: number = 500
   ) {
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    const errorMessage = this.getErrorMessage(error);
     
     // Log error details (without sensitive information)
-    console.error(`[${context}] Error:`, errorMessage);
+    console.error(`[${context}] Error: ${errorMessage}`);
     
     return ApiResponseBuilder.error(`${context}: ${errorMessage}`, status);
   }
