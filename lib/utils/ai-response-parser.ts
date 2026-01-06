@@ -9,14 +9,14 @@ export class AIResponseParser {
    */
   static extractJSON<T = unknown>(responseText: string): T {
     let jsonText = responseText.trim();
-    
+
     // Handle markdown code blocks
     if (jsonText.includes("```json")) {
       jsonText = jsonText.split("```json")[1].split("```")[0].trim();
     } else if (jsonText.includes("```")) {
       jsonText = jsonText.split("```")[1].split("```")[0].trim();
     }
-    
+
     return JSON.parse(jsonText) as T;
   }
 
@@ -31,7 +31,8 @@ export class AIResponseParser {
       return this.extractJSON<T>(responseText);
     } catch (error) {
       // Log error without exposing potentially sensitive response text
-      console.error("Failed to parse AI response:", error instanceof Error ? error.message : "Unknown error");
+      const errorMsg = error instanceof Error ? error.message : "Unknown error";
+      console.error(`Failed to parse AI response: ${errorMsg}`);
       return fallback;
     }
   }

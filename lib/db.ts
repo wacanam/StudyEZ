@@ -14,7 +14,14 @@ function getPool(): Pool {
     if (!connectionString) {
       throw new Error("DATABASE_URL environment variable is not set");
     }
-    globalForPrisma.pool = new Pool({ connectionString });
+    globalForPrisma.pool = new Pool({
+      connectionString,
+      // Connection pool configuration
+      max: 20, // Maximum number of connections
+      idleTimeoutMillis: 30000, // Close idle connections after 30s
+      connectionTimeoutMillis: 5000, // Timeout for acquiring a connection from the pool
+      statement_timeout: 30000, // Query timeout in milliseconds
+    });
   }
   return globalForPrisma.pool;
 }
@@ -23,9 +30,28 @@ export function getPrisma(): PrismaClient {
   if (!globalForPrisma.prisma) {
     const pool = getPool();
     const adapter = new PrismaPg(pool);
-    globalForPrisma.prisma = new PrismaClient({ adapter });
+    globalForPrisma.prisma = new PrismaClient({
+      adapter,
+      // Enable detailed error logging
+      errorFormat: 'pretty',
+    });
   }
   return globalForPrisma.prisma;
+}
+
+/**
+ * Test database connectivity
+ */
+export async function testDatabaseConnection(): Promise<boolean> {
+  try {
+    const db = getPrisma();
+    await db.$queryRaw`SELECT 1`;
+    console.log("✓ Database connection successful");
+    return true;
+  } catch (error) {
+    console.error("✗ Database connection failed:", error instanceof Error ? error.message : error);
+    return false;
+  }
 }
 
 /**
@@ -37,7 +63,7 @@ function toVectorString(embedding: number[]): string {
 
 export async function initializeDatabase(): Promise<void> {
   const db = getPrisma();
-  
+
   // Create pgvector extension if not exists
   await db.$executeRawUnsafe(`CREATE EXTENSION IF NOT EXISTS vector`);
 
@@ -66,10 +92,10 @@ export async function storeDocument(
   metadata: Record<string, unknown> = {}
 ): Promise<number> {
   const db = getPrisma();
-  
+
   // Convert embedding array to PGVector format string
   const vectorString = toVectorString(embedding);
-  
+
   // Use raw query to handle vector type
   // Note: Prisma's $queryRaw with template literals uses parameterized queries, safe from SQL injection
   const result = await db.$queryRaw<{ id: number }[]>`
@@ -87,10 +113,10 @@ export async function searchSimilarDocuments(
   limit: number = 5
 ): Promise<Array<{ id: number; content: string; score: number; metadata: Record<string, unknown> }>> {
   const db = getPrisma();
-  
+
   // Convert embedding array to PGVector format string
   const vectorString = toVectorString(embedding);
-  
+
   const results = await db.$queryRaw<
     Array<{ id: number; content: string; score: number; metadata: Record<string, unknown> }>
   >`
@@ -117,7 +143,7 @@ export async function hybridSearch(
 ): Promise<Array<{ id: number; content: string; score: number; metadata: Record<string, unknown> }>> {
   const db = getPrisma();
   const vectorString = toVectorString(embedding);
-  
+
   // Perform hybrid search using RRF (Reciprocal Rank Fusion)
   // k=60 is a common constant for RRF
   const results = await db.$queryRaw<
