@@ -51,6 +51,7 @@ export async function POST(request: NextRequest) {
       text: doc.content.substring(0, 200) + (doc.content.length > 200 ? "..." : ""),
       score: doc.score,
       metadata: doc.metadata,
+      isVisual: doc.metadata?.chunkType === "visual",
     }));
 
     // Save to database

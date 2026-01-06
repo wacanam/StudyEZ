@@ -4,6 +4,10 @@ import { initializeDatabase, storeDocument } from "@/lib/db";
 import { generateEmbedding, chunkText } from "@/lib/rag";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
+// Constants for visual extraction
+const NO_VISUALS_MARKER = "NO_VISUALS_FOUND";
+const VISUAL_SEPARATOR = "---";
+
 // Initialize Gemini client
 function getGenAI(): GoogleGenerativeAI {
   const apiKey = process.env.GOOGLE_API_KEY;
@@ -48,9 +52,30 @@ export async function POST(request: NextRequest) {
       let content: string;
       
       if (fileType === "application/pdf") {
-        // Use Gemini to extract text from PDF
+        // Use Gemini to extract text and visual descriptions from PDF
         const buffer = await file.arrayBuffer();
-        content = await extractTextWithGemini(buffer, fileType);
+        const { textContent, visualDescriptions } = await extractTextWithGemini(buffer, fileType);
+        content = textContent;
+        
+        // Process visual descriptions as separate chunks
+        if (visualDescriptions && visualDescriptions.length > 0) {
+          console.log(`Found ${visualDescriptions.length} visual elements in ${fileName}`);
+          
+          // Generate embeddings for all visual descriptions concurrently
+          const embeddingPromises = visualDescriptions.map(desc => generateEmbedding(desc));
+          const embeddings = await Promise.all(embeddingPromises);
+          
+          // Store visual descriptions with their embeddings
+          for (let i = 0; i < visualDescriptions.length; i++) {
+            await storeDocument(visualDescriptions[i], embeddings[i], userId, {
+              fileName,
+              chunkType: "visual",
+              visualIndex: i,
+            });
+            
+            totalChunks++;
+          }
+        }
       } else {
         // Text file - read directly
         content = await file.text();
@@ -73,6 +98,7 @@ export async function POST(request: NextRequest) {
         
         await storeDocument(chunk, embedding, userId, {
           fileName,
+          chunkType: "text",
           chunkIndex: i,
           totalChunks: chunks.length,
         });
@@ -99,9 +125,12 @@ export async function POST(request: NextRequest) {
 }
 
 /**
- * Use Gemini's vision capabilities to extract text from PDF files
+ * Use Gemini's vision capabilities to extract text and visual descriptions from PDF files
  */
-async function extractTextWithGemini(buffer: ArrayBuffer, mimeType: string): Promise<string> {
+async function extractTextWithGemini(
+  buffer: ArrayBuffer, 
+  mimeType: string
+): Promise<{ textContent: string; visualDescriptions: string[] }> {
   const genAI = getGenAI();
   
   // Use Gemini 2.0 Flash which supports document understanding
@@ -110,8 +139,8 @@ async function extractTextWithGemini(buffer: ArrayBuffer, mimeType: string): Pro
   // Convert ArrayBuffer to base64
   const base64Data = Buffer.from(buffer).toString("base64");
   
-  // Create the request with inline data (PDF)
-  const result = await model.generateContent([
+  // First pass: Extract text content
+  const textResult = await model.generateContent([
     {
       inlineData: {
         mimeType: mimeType,
@@ -127,8 +156,50 @@ If there are headers, paragraphs, lists, or other structural elements, preserve 
     },
   ]);
 
-  const response = result.response;
-  const extractedText = response.text();
+  const textContent = textResult.response.text().trim();
   
-  return extractedText.trim();
+  // Second pass: Extract visual descriptions
+  const visualResult = await model.generateContent([
+    {
+      inlineData: {
+        mimeType: mimeType,
+        data: base64Data,
+      },
+    },
+    {
+      text: `Analyze this PDF document and identify any visual content such as diagrams, charts, tables, graphs, images, or figures.
+For EACH visual element you find, provide a detailed description in the following format:
+
+[VISUAL: Type of visual (e.g., diagram, chart, table, graph, image)]
+Description: [Detailed description of the visual element, including key data points, labels, trends, or important information it conveys]
+Context: [Any surrounding text or captions that provide context for this visual]
+${VISUAL_SEPARATOR}
+
+If there are NO visual elements in the document, respond with exactly: "${NO_VISUALS_MARKER}"
+
+Focus on visual content that contains important information for studying, such as:
+- Diagrams showing processes or relationships
+- Charts and graphs with data
+- Tables with structured information
+- Annotated images
+- Flowcharts or mind maps
+
+Provide clear, detailed descriptions that would help someone understand the visual content without seeing it.`,
+    },
+  ]);
+
+  const visualResponse = visualResult.response.text().trim();
+  
+  // Parse visual descriptions
+  const visualDescriptions: string[] = [];
+  if (visualResponse !== NO_VISUALS_MARKER && visualResponse.length > 0) {
+    // Split by the separator and filter empty entries
+    const descriptions = visualResponse
+      .split(VISUAL_SEPARATOR)
+      .map(d => d.trim())
+      .filter(d => d.length > 0 && d !== NO_VISUALS_MARKER);
+    visualDescriptions.push(...descriptions);
+  }
+  
+  return { textContent, visualDescriptions };
 }
