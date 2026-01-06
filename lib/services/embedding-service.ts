@@ -10,12 +10,24 @@ export class EmbeddingService {
 
   /**
    * Generate embeddings for given text
+   * @throws Error if text is empty or API call fails
    */
   async generateEmbedding(text: string): Promise<number[]> {
+    if (!text || !text.trim()) {
+      throw new Error("Cannot generate embedding for empty text");
+    }
+
     const client = getAIClient();
     const model = client.getGenerativeModel({ model: this.modelName });
-    const result = await model.embedContent(text);
-    return result.embedding.values;
+    
+    try {
+      const result = await model.embedContent(text);
+      return result.embedding.values;
+    } catch (error) {
+      throw new Error(
+        `Failed to generate embedding: ${error instanceof Error ? error.message : "Unknown error"}`
+      );
+    }
   }
 
   /**

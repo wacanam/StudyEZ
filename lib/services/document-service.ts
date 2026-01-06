@@ -6,6 +6,13 @@ import {
 } from "llamaindex";
 
 /**
+ * Interface for LlamaIndex source node content
+ */
+interface SourceNodeContent {
+  text?: string;
+}
+
+/**
  * Service for document operations
  * Single Responsibility: Handle document processing and indexing
  */
@@ -71,7 +78,7 @@ export class DocumentService {
     const response = await queryEngine.query({ query });
 
     const sources = response.sourceNodes?.map((node) => {
-      const textNode = node.node as unknown as { text?: string };
+      const textNode = node.node as unknown as SourceNodeContent;
       return textNode.text || "";
     }) || [];
 

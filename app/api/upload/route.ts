@@ -9,11 +9,6 @@ import { getAIClient } from "@/lib/ai-client";
 const NO_VISUALS_MARKER = "NO_VISUALS_FOUND";
 const VISUAL_SEPARATOR = "---";
 
-// Initialize Gemini client
-function getGenAI() {
-  return getAIClient();
-}
-
 export async function POST(request: NextRequest) {
   try {
     // Authenticate user using middleware
@@ -118,7 +113,7 @@ async function extractTextWithGemini(
   buffer: ArrayBuffer, 
   mimeType: string
 ): Promise<{ textContent: string; visualDescriptions: string[] }> {
-  const genAI = getGenAI();
+  const genAI = getAIClient();
   
   // Use Gemini 2.0 Flash which supports document understanding
   const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });

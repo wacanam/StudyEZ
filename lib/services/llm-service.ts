@@ -11,38 +11,77 @@ export class LLMService {
 
   /**
    * Generate a response using the LLM
+   * @throws Error if response generation fails
    */
   async generateResponse(
     query: string,
     context: string[],
     systemPrompt?: string
   ): Promise<string> {
+    // Sanitize inputs to prevent prompt injection
+    const sanitizedQuery = query.trim();
+    const sanitizedContext = context.map(c => c.trim()).filter(c => c.length > 0);
+
+    if (!sanitizedQuery) {
+      throw new Error("Query cannot be empty");
+    }
+
     const client = getAIClient();
     const model = client.getGenerativeModel({ model: this.defaultModel });
 
-    const contextText = context.join("\n\n---\n\n");
+    const contextText = sanitizedContext.join("\n\n---\n\n");
 
     const prompt = systemPrompt || `You are a helpful study assistant. Use the following context from study materials to answer the question. If the context doesn't contain relevant information, say so but try to provide helpful guidance.
 
 Context from study materials:
 ${contextText}
 
-Question: ${query}
+Question: ${sanitizedQuery}
 
 Please provide a clear, concise answer that helps with studying. If referencing specific information from the context, mention it.`;
 
-    const result = await model.generateContent(prompt);
-    return result.response.text();
+    try {
+      const result = await model.generateContent(prompt);
+      const responseText = result.response.text();
+      
+      if (!responseText || !responseText.trim()) {
+        throw new Error("AI generated empty response");
+      }
+      
+      return responseText;
+    } catch (error) {
+      throw new Error(
+        `Failed to generate response: ${error instanceof Error ? error.message : "Unknown error"}`
+      );
+    }
   }
 
   /**
    * Generate content with custom prompt
+   * @throws Error if content generation fails
    */
   async generateContent(prompt: string): Promise<string> {
+    if (!prompt || !prompt.trim()) {
+      throw new Error("Prompt cannot be empty");
+    }
+
     const client = getAIClient();
     const model = client.getGenerativeModel({ model: this.defaultModel });
-    const result = await model.generateContent(prompt);
-    return result.response.text();
+    
+    try {
+      const result = await model.generateContent(prompt);
+      const responseText = result.response.text();
+      
+      if (!responseText || !responseText.trim()) {
+        throw new Error("AI generated empty response");
+      }
+      
+      return responseText;
+    } catch (error) {
+      throw new Error(
+        `Failed to generate content: ${error instanceof Error ? error.message : "Unknown error"}`
+      );
+    }
   }
 
   /**
