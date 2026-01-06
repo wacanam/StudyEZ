@@ -1,32 +1,23 @@
-import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
+import { NextRequest } from "next/server";
+import { requireAuth, isAuthSuccess } from "@/lib/middleware/auth-middleware";
+import { ErrorHandler } from "@/lib/utils/error-handler";
+import { ApiResponseBuilder } from "@/lib/utils/api-response";
 import { initializeDatabase, storeDocument } from "@/lib/db";
 import { generateEmbedding, chunkText } from "@/lib/rag";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { getAIClient } from "@/lib/ai-client";
 
 // Constants for visual extraction
 const NO_VISUALS_MARKER = "NO_VISUALS_FOUND";
 const VISUAL_SEPARATOR = "---";
 
-// Initialize Gemini client
-function getGenAI(): GoogleGenerativeAI {
-  const apiKey = process.env.GOOGLE_API_KEY;
-  if (!apiKey) {
-    throw new Error("GOOGLE_API_KEY environment variable is not set");
-  }
-  return new GoogleGenerativeAI(apiKey);
-}
-
 export async function POST(request: NextRequest) {
   try {
-    // Get the authenticated user's ID
-    const { userId } = await auth();
-    if (!userId) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      );
+    // Authenticate user using middleware
+    const authResult = await requireAuth();
+    if (!isAuthSuccess(authResult)) {
+      return authResult.error;
     }
+    const { userId } = authResult;
 
     // Initialize database tables if needed
     await initializeDatabase();
@@ -35,10 +26,7 @@ export async function POST(request: NextRequest) {
     const files = formData.getAll("files") as File[];
 
     if (!files || files.length === 0) {
-      return NextResponse.json(
-        { error: "No files provided" },
-        { status: 400 }
-      );
+      return ErrorHandler.badRequest("No files provided");
     }
 
     let totalChunks = 0;
@@ -109,18 +97,13 @@ export async function POST(request: NextRequest) {
       processedFiles.push(fileName);
     }
 
-    return NextResponse.json({
+    return ApiResponseBuilder.success({
       message: `Successfully processed ${processedFiles.length} file(s)`,
       documentsCount: totalChunks,
       files: processedFiles,
     });
   } catch (error) {
-    console.error("Upload error:", error);
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
-    return NextResponse.json(
-      { error: `Failed to process files: ${errorMessage}` },
-      { status: 500 }
-    );
+    return ErrorHandler.handleRouteError(error, "Failed to process files");
   }
 }
 
@@ -131,7 +114,7 @@ async function extractTextWithGemini(
   buffer: ArrayBuffer, 
   mimeType: string
 ): Promise<{ textContent: string; visualDescriptions: string[] }> {
-  const genAI = getGenAI();
+  const genAI = getAIClient();
   
   // Use Gemini 2.0 Flash which supports document understanding
   const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });

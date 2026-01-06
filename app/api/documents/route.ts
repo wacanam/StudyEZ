@@ -1,17 +1,17 @@
-import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
+import { NextRequest } from "next/server";
+import { requireAuth, isAuthSuccess } from "@/lib/middleware/auth-middleware";
+import { ErrorHandler } from "@/lib/utils/error-handler";
+import { ApiResponseBuilder } from "@/lib/utils/api-response";
 import { getPrisma } from "@/lib/db";
 
 export async function GET(request: NextRequest) {
   try {
-    // Get the authenticated user's ID
-    const { userId } = await auth();
-    if (!userId) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      );
+    // Authenticate user using middleware
+    const authResult = await requireAuth();
+    if (!isAuthSuccess(authResult)) {
+      return authResult.error;
     }
+    const { userId } = authResult;
 
     const db = getPrisma();
     
@@ -64,16 +64,11 @@ export async function GET(request: NextRequest) {
     // Convert map to array
     const fileList = Array.from(fileMap.values());
 
-    return NextResponse.json({
+    return ApiResponseBuilder.success({
       files: fileList,
       totalDocuments: documents.length,
     });
   } catch (error) {
-    console.error("Error fetching documents:", error);
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
-    return NextResponse.json(
-      { error: `Failed to fetch documents: ${errorMessage}` },
-      { status: 500 }
-    );
+    return ErrorHandler.handleRouteError(error, "Failed to fetch documents");
   }
 }

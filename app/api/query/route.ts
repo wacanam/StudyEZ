@@ -1,27 +1,25 @@
-import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
+import { NextRequest } from "next/server";
+import { requireAuth, isAuthSuccess } from "@/lib/middleware/auth-middleware";
+import { ErrorHandler } from "@/lib/utils/error-handler";
+import { ApiResponseBuilder } from "@/lib/utils/api-response";
+import { sourcesToJson, SourceDocument } from "@/lib/types/api-types";
 import { hybridSearch, initializeDatabase, getPrisma } from "@/lib/db";
 import { generateEmbedding, generateResponse, rerankDocuments } from "@/lib/rag";
 
 export async function POST(request: NextRequest) {
   try {
-    // Get the authenticated user's ID
-    const { userId } = await auth();
-    if (!userId) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      );
+    // Authenticate user using middleware
+    const authResult = await requireAuth();
+    if (!isAuthSuccess(authResult)) {
+      return authResult.error;
     }
+    const { userId } = authResult;
 
     const body = await request.json();
     const { query, sessionId } = body;
 
     if (!query || typeof query !== "string") {
-      return NextResponse.json(
-        { error: "Query is required" },
-        { status: 400 }
-      );
+      return ErrorHandler.badRequest("Query is required");
     }
 
     // Initialize database if needed
@@ -34,7 +32,7 @@ export async function POST(request: NextRequest) {
     const candidateDocs = await hybridSearch(query, queryEmbedding, userId, 10);
 
     if (candidateDocs.length === 0) {
-      return NextResponse.json({
+      return ApiResponseBuilder.success({
         answer: "No relevant study materials found. Please upload some documents first.",
         sources: [],
         confidenceScore: 0,
@@ -74,8 +72,8 @@ export async function POST(request: NextRequest) {
       : 0;
     const confidenceScore = Math.round(avgRelevance);
 
-    // Prepare sources for response
-    const sources = topDocs.map((doc) => ({
+    // Prepare sources for response with proper typing
+    const sources: SourceDocument[] = topDocs.map((doc) => ({
       text: doc.content.substring(0, 200) + (doc.content.length > 200 ? "..." : ""),
       score: doc.score,
       relevanceScore: doc.relevanceScore,
@@ -110,29 +108,24 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Save assistant's answer
+    // Save assistant's answer with properly typed sources
     await db.chatMessage.create({
       data: {
         sessionId: currentSessionId,
         role: "assistant",
         content: answer,
-        sources: sources as any,
+        sources: sourcesToJson(sources),
       },
     });
 
     // Return response with sources, sessionId, and confidence score
-    return NextResponse.json({
+    return ApiResponseBuilder.success({
       answer,
       sources,
       sessionId: currentSessionId,
       confidenceScore,
     });
   } catch (error) {
-    console.error("Query error:", error);
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
-    return NextResponse.json(
-      { error: `Failed to process query: ${errorMessage}` },
-      { status: 500 }
-    );
+    return ErrorHandler.handleRouteError(error, "Failed to process query");
   }
 }
