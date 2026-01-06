@@ -49,6 +49,13 @@ export async function initializeDatabase(): Promise<void> {
     WITH (lists = 100)
   `);
 
+  // Create GIN index for full-text search if it doesn't exist
+  await db.$executeRawUnsafe(`
+    CREATE INDEX IF NOT EXISTS documents_content_fts_idx 
+    ON documents 
+    USING gin (to_tsvector('english', content))
+  `);
+
   console.log("Database initialized successfully");
 }
 
@@ -92,6 +99,62 @@ export async function searchSimilarDocuments(
     FROM documents
     WHERE embedding IS NOT NULL AND user_id = ${userId}
     ORDER BY embedding <=> ${vectorString}::vector
+    LIMIT ${limit}
+  `;
+
+  return results;
+}
+
+/**
+ * Hybrid search combining vector similarity and full-text search
+ * Uses Reciprocal Rank Fusion (RRF) to combine rankings from both methods
+ */
+export async function hybridSearch(
+  query: string,
+  embedding: number[],
+  userId: string,
+  limit: number = 10
+): Promise<Array<{ id: number; content: string; score: number; metadata: Record<string, unknown> }>> {
+  const db = getPrisma();
+  const vectorString = toVectorString(embedding);
+  
+  // Perform hybrid search using RRF (Reciprocal Rank Fusion)
+  // k=60 is a common constant for RRF
+  const results = await db.$queryRaw<
+    Array<{ id: number; content: string; score: number; metadata: Record<string, unknown> }>
+  >`
+    WITH vector_search AS (
+      SELECT 
+        id, 
+        content, 
+        metadata,
+        ROW_NUMBER() OVER (ORDER BY embedding <=> ${vectorString}::vector) AS rank
+      FROM documents
+      WHERE embedding IS NOT NULL AND user_id = ${userId}
+      LIMIT 20
+    ),
+    fts_search AS (
+      SELECT 
+        id, 
+        content, 
+        metadata,
+        ROW_NUMBER() OVER (ORDER BY ts_rank(to_tsvector('english', content), plainto_tsquery('english', ${query})) DESC) AS rank
+      FROM documents
+      WHERE user_id = ${userId} AND to_tsvector('english', content) @@ plainto_tsquery('english', ${query})
+      LIMIT 20
+    ),
+    combined AS (
+      SELECT 
+        COALESCE(v.id, f.id) AS id,
+        COALESCE(v.content, f.content) AS content,
+        COALESCE(v.metadata, f.metadata) AS metadata,
+        (COALESCE(1.0 / (60 + v.rank), 0.0) + COALESCE(1.0 / (60 + f.rank), 0.0)) AS score
+      FROM vector_search v
+      FULL OUTER JOIN fts_search f ON v.id = f.id
+    )
+    SELECT id, content, metadata, score
+    FROM combined
+    ORDER BY score DESC
     LIMIT ${limit}
   `;
 

@@ -32,7 +32,7 @@ export async function generateEmbedding(text: string): Promise<number[]> {
 }
 
 /**
- * Generate a response using Gemini 2.5 Flash LLM
+ * Generate a response using Gemini 2.0 Flash LLM
  */
 export async function generateResponse(
   query: string,
@@ -55,6 +55,71 @@ Please provide a clear, concise answer that helps with studying. If referencing 
   const result = await model.generateContent(prompt);
   const response = result.response;
   return response.text();
+}
+
+/**
+ * Re-rank documents using Gemini to select the most relevant ones
+ * Returns the indices of the top N most relevant documents
+ */
+export async function rerankDocuments(
+  query: string,
+  documents: Array<{ content: string; score: number }>,
+  topK: number = 3
+): Promise<Array<{ index: number; relevanceScore: number }>> {
+  const ai = getGenAI();
+  const model = ai.getGenerativeModel({ model: "gemini-2.0-flash" });
+
+  // Create a numbered list of documents for the LLM to evaluate
+  const documentList = documents
+    .map((doc, idx) => `Document ${idx + 1}:\n${doc.content}`)
+    .join("\n\n---\n\n");
+
+  const prompt = `You are an expert at evaluating document relevance. Given a query and a list of documents, identify the ${topK} most relevant documents that best answer the query.
+
+Query: ${query}
+
+Documents:
+${documentList}
+
+Instructions:
+1. Carefully evaluate each document's relevance to the query
+2. Select the ${topK} most relevant documents
+3. For each selected document, provide its number and a relevance score (0-100)
+4. Return ONLY a JSON array in this exact format:
+[
+  {"index": 1, "relevanceScore": 95},
+  {"index": 3, "relevanceScore": 87},
+  {"index": 2, "relevanceScore": 75}
+]
+
+Important: Return ONLY the JSON array, no other text or explanation.`;
+
+  const result = await model.generateContent(prompt);
+  const responseText = result.response.text().trim();
+  
+  try {
+    // Extract JSON from response (handle potential markdown code blocks)
+    let jsonText = responseText;
+    if (responseText.includes("```json")) {
+      jsonText = responseText.split("```json")[1].split("```")[0].trim();
+    } else if (responseText.includes("```")) {
+      jsonText = responseText.split("```")[1].split("```")[0].trim();
+    }
+    
+    const rankings = JSON.parse(jsonText) as Array<{ index: number; relevanceScore: number }>;
+    
+    // Convert 1-based indices to 0-based and validate
+    return rankings
+      .map(r => ({ index: r.index - 1, relevanceScore: r.relevanceScore }))
+      .filter(r => r.index >= 0 && r.index < documents.length)
+      .slice(0, topK);
+  } catch (error) {
+    console.error("Failed to parse re-ranking response:", error, "Response:", responseText);
+    // Fallback: return top K based on original scores
+    return documents
+      .map((_, idx) => ({ index: idx, relevanceScore: Math.min(documents[idx].score * 100, 100) }))
+      .slice(0, topK);
+  }
 }
 
 /**

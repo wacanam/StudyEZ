@@ -12,10 +12,12 @@ interface QueryResponse {
   sources: Array<{
     text: string;
     score: number;
+    relevanceScore?: number;
     metadata?: Record<string, unknown>;
     isVisual?: boolean;
   }>;
   sessionId?: number;
+  confidenceScore?: number;
 }
 
 interface UploadStatus {
@@ -612,7 +614,21 @@ export default function Dashboard() {
         {/* Response Section */}
         {studyMode === "query" && response && (
           <section className="bg-surface rounded-xl p-6 mb-8 shadow-sm">
-            <h2 className="text-xl font-semibold text-ink mb-4">💡 Answer</h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-semibold text-ink">💡 Answer</h2>
+              {response.confidenceScore !== undefined && (
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-ink/60">Confidence:</span>
+                  <div className={`px-3 py-1 rounded-full font-semibold text-sm ${
+                    response.confidenceScore >= 80 ? 'bg-green-100 text-green-800' :
+                    response.confidenceScore >= 60 ? 'bg-yellow-100 text-yellow-800' :
+                    'bg-red-100 text-red-800'
+                  }`}>
+                    {response.confidenceScore}%
+                  </div>
+                </div>
+              )}
+            </div>
             <div className="prose prose-sm max-w-none">
               <p className="text-ink whitespace-pre-wrap">{response.answer}</p>
             </div>
@@ -634,9 +650,16 @@ export default function Dashboard() {
                         </div>
                       )}
                       <p className="text-sm text-ink/80">{source.text}</p>
-                      <p className="text-xs text-ink/50 mt-1">
-                        Relevance: {(source.score * 100).toFixed(1)}%
-                      </p>
+                      <div className="flex gap-4 mt-1">
+                        {source.relevanceScore !== undefined && (
+                          <p className="text-xs text-ink/50">
+                            AI Relevance: {source.relevanceScore.toFixed(0)}%
+                          </p>
+                        )}
+                        <p className="text-xs text-ink/50">
+                          Similarity: {(source.score * 100).toFixed(1)}%
+                        </p>
+                      </div>
                     </div>
                   ))}
                 </div>

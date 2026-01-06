@@ -22,8 +22,11 @@
 
 - 🔐 **User Authentication**: Secure sign-in with [Clerk](https://clerk.com)
 - 📚 **Document Upload**: Upload PDF or TXT study materials (private to your account)
-- 🔍 **RAG Queries**: Ask questions and get AI-powered answers from your materials  
-- 📄 **Source References**: View relevant source snippets with relevance scores
+- 🔍 **RAG Queries**: Ask questions and get AI-powered answers from your materials
+  - **Hybrid Search**: Combines vector similarity with PostgreSQL Full-Text Search for better keyword matching
+  - **AI Re-ranking**: Uses Gemini to intelligently select the most relevant documents from candidates
+  - **Confidence Score**: Shows answer quality with color-coded confidence indicators
+- 📄 **Source References**: View relevant source snippets with both AI relevance and similarity scores
 - 💬 **Chat History**: Persistent chat sessions saved to database
   - View previous conversations in the History sidebar
   - Continue existing chat sessions
@@ -31,6 +34,25 @@
 - 🗂️ **Flashcards & Quizzes**: Generate AI-powered study tools from your materials
 - 📋 **Activity Log**: Track upload and query activity in real-time
 - 🔒 **Private Libraries**: Each user has their own isolated document library
+
+## Retrieval Pipeline
+
+The RAG system uses a sophisticated three-stage retrieval pipeline:
+
+1. **Hybrid Search** (Stage 1): Retrieves top 10 candidate documents by combining:
+   - **Vector Similarity Search**: Semantic matching using PGVector embeddings
+   - **Full-Text Search**: Keyword matching using PostgreSQL FTS
+   - **Reciprocal Rank Fusion (RRF)**: Intelligently merges both rankings
+
+2. **AI Re-ranking** (Stage 2): 
+   - Sends top 10 candidates to Gemini AI
+   - LLM evaluates each document's relevance to the query
+   - Returns top 3 most relevant documents with confidence scores
+
+3. **Answer Generation** (Stage 3):
+   - Uses the top 3 re-ranked documents as context
+   - Generates a comprehensive answer with Gemini 2.0 Flash
+   - Calculates overall confidence score from re-ranking results
 
 ## LlamaIndex Integration
 
