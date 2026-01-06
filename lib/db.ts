@@ -30,7 +30,7 @@ export function getPrisma(): PrismaClient {
   if (!globalForPrisma.prisma) {
     const pool = getPool();
     const adapter = new PrismaPg(pool);
-    globalForPrisma.prisma = new PrismaClient({ 
+    globalForPrisma.prisma = new PrismaClient({
       adapter,
       // Enable detailed error logging
       errorFormat: 'pretty',
@@ -63,7 +63,7 @@ function toVectorString(embedding: number[]): string {
 
 export async function initializeDatabase(): Promise<void> {
   const db = getPrisma();
-  
+
   // Create pgvector extension if not exists
   await db.$executeRawUnsafe(`CREATE EXTENSION IF NOT EXISTS vector`);
 
@@ -92,10 +92,10 @@ export async function storeDocument(
   metadata: Record<string, unknown> = {}
 ): Promise<number> {
   const db = getPrisma();
-  
+
   // Convert embedding array to PGVector format string
   const vectorString = toVectorString(embedding);
-  
+
   // Use raw query to handle vector type
   // Note: Prisma's $queryRaw with template literals uses parameterized queries, safe from SQL injection
   const result = await db.$queryRaw<{ id: number }[]>`
@@ -113,10 +113,10 @@ export async function searchSimilarDocuments(
   limit: number = 5
 ): Promise<Array<{ id: number; content: string; score: number; metadata: Record<string, unknown> }>> {
   const db = getPrisma();
-  
+
   // Convert embedding array to PGVector format string
   const vectorString = toVectorString(embedding);
-  
+
   const results = await db.$queryRaw<
     Array<{ id: number; content: string; score: number; metadata: Record<string, unknown> }>
   >`
@@ -143,7 +143,7 @@ export async function hybridSearch(
 ): Promise<Array<{ id: number; content: string; score: number; metadata: Record<string, unknown> }>> {
   const db = getPrisma();
   const vectorString = toVectorString(embedding);
-  
+
   // Perform hybrid search using RRF (Reciprocal Rank Fusion)
   // k=60 is a common constant for RRF
   const results = await db.$queryRaw<

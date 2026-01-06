@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
     const { userId } = authResult;
 
     const db = getPrisma();
-    
+
     // Fetch all documents for the user with timeout handling
     let documents;
     try {
@@ -58,7 +58,7 @@ export async function GET(request: NextRequest) {
     for (const doc of documents) {
       const metadata = doc.metadata as Record<string, unknown>;
       const fileName = (metadata.fileName as string) || "Unknown";
-      
+
       if (!fileMap.has(fileName)) {
         fileMap.set(fileName, {
           fileName,
@@ -67,11 +67,11 @@ export async function GET(request: NextRequest) {
           documentIds: [],
         });
       }
-      
+
       const fileData = fileMap.get(fileName)!;
       fileData.chunkCount++;
       fileData.documentIds.push(doc.id);
-      
+
       // Keep the first upload date (earliest chunk)
       if (doc.createdAt < fileData.uploadDate) {
         fileData.uploadDate = doc.createdAt;

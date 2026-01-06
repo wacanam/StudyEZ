@@ -35,10 +35,10 @@ export class ErrorHandler {
     status: number = 500
   ) {
     const errorMessage = this.getErrorMessage(error);
-    
+
     // Log error details (without sensitive information)
     console.error(`[${context}] Error: ${errorMessage}`);
-    
+
     return ApiResponseBuilder.error(`${context}: ${errorMessage}`, status);
   }
 
