@@ -66,6 +66,7 @@ interface ChatSession {
 }
 
 type StudyMode = "query" | "flashcards" | "quiz" | "documents";
+type UploadMode = "files" | "link";
 
 export default function Dashboard() {
   const [query, setQuery] = useState("");
@@ -85,6 +86,8 @@ export default function Dashboard() {
   const [currentSessionId, setCurrentSessionId] = useState<number | null>(null);
   const [selectedSession, setSelectedSession] = useState<ChatSession | null>(null);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [uploadMode, setUploadMode] = useState<UploadMode>("files");
+  const [linkUrl, setLinkUrl] = useState("");
 
   const addLog = (message: string) => {
     const timestamp = new Date().toLocaleTimeString();
@@ -238,6 +241,49 @@ export default function Dashboard() {
     e.target.value = "";
   };
 
+  const handleLinkUpload = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!linkUrl.trim()) return;
+
+    setUploadStatus({ status: "uploading", message: "Processing URL..." });
+    addLog(`Starting URL processing: ${linkUrl}`);
+
+    try {
+      const res = await fetch("/api/upload/link", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ url: linkUrl }),
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        setUploadStatus({
+          status: "success",
+          message: data.message,
+          documentsCount: data.documentsCount,
+        });
+        addLog(`URL processing successful: ${data.documentsCount} chunks created from ${data.type}`);
+        setLinkUrl("");
+      } else {
+        setUploadStatus({
+          status: "error",
+          message: data.error || "Failed to process URL",
+        });
+        addLog(`URL processing error: ${data.error}`);
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Unknown error";
+      setUploadStatus({
+        status: "error",
+        message: errorMessage,
+      });
+      addLog(`URL processing exception: ${errorMessage}`);
+    }
+  };
+
   const handleQuery = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!query.trim()) return;
@@ -310,36 +356,85 @@ export default function Dashboard() {
           <h2 className="text-xl font-semibold text-ink mb-4">
             📚 Upload Study Materials
           </h2>
+          
+          {/* Upload Mode Tabs */}
+          <div className="flex gap-2 mb-4 border-b border-ink/10">
+            <button
+              onClick={() => setUploadMode("files")}
+              className={`px-4 py-2 font-medium transition-colors ${
+                uploadMode === "files"
+                  ? "text-accent border-b-2 border-accent"
+                  : "text-ink/60 hover:text-ink"
+              }`}
+            >
+              📄 Files
+            </button>
+            <button
+              onClick={() => setUploadMode("link")}
+              className={`px-4 py-2 font-medium transition-colors ${
+                uploadMode === "link"
+                  ? "text-accent border-b-2 border-accent"
+                  : "text-ink/60 hover:text-ink"
+              }`}
+            >
+              🔗 Link
+            </button>
+          </div>
+
           <div className="flex flex-col gap-4">
-            <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-accent/50 rounded-lg cursor-pointer hover:bg-accent/5 transition-colors">
-              <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                <svg
-                  className="w-8 h-8 mb-2 text-accent"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
+            {uploadMode === "files" ? (
+              <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-accent/50 rounded-lg cursor-pointer hover:bg-accent/5 transition-colors">
+                <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                  <svg
+                    className="w-8 h-8 mb-2 text-accent"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
+                    />
+                  </svg>
+                  <p className="text-sm text-ink/70">
+                    <span className="font-semibold text-accent">Click to upload</span>{" "}
+                    or drag and drop
+                  </p>
+                  <p className="text-xs text-ink/50">PDF or TXT files</p>
+                </div>
+                <input
+                  type="file"
+                  className="hidden"
+                  accept=".pdf,.txt"
+                  multiple
+                  onChange={handleFileUpload}
+                />
+              </label>
+            ) : (
+              <form onSubmit={handleLinkUpload} className="flex flex-col gap-3">
+                <div className="flex gap-3">
+                  <input
+                    type="url"
+                    value={linkUrl}
+                    onChange={(e) => setLinkUrl(e.target.value)}
+                    placeholder="Enter YouTube URL or educational website link..."
+                    className="flex-1 px-4 py-3 rounded-lg border border-ink/20 bg-background focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent text-ink placeholder:text-ink/40"
                   />
-                </svg>
-                <p className="text-sm text-ink/70">
-                  <span className="font-semibold text-accent">Click to upload</span>{" "}
-                  or drag and drop
+                  <button
+                    type="submit"
+                    disabled={uploadStatus.status === "uploading" || !linkUrl.trim()}
+                    className="px-6 py-3 bg-accent text-white font-semibold rounded-lg hover:bg-accent/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {uploadStatus.status === "uploading" ? "Processing..." : "Add"}
+                  </button>
+                </div>
+                <p className="text-xs text-ink/50">
+                  Supports YouTube videos and educational websites (Wikipedia, blog posts, etc.)
                 </p>
-                <p className="text-xs text-ink/50">PDF or TXT files</p>
-              </div>
-              <input
-                type="file"
-                className="hidden"
-                accept=".pdf,.txt"
-                multiple
-                onChange={handleFileUpload}
-              />
-            </label>
+              </form>
+            )}
 
             {uploadStatus.status !== "idle" && (
               <div
