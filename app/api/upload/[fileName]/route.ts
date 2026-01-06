@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
+import { requireAuth, isAuthSuccess } from "@/lib/middleware/auth-middleware";
+import { ErrorHandler } from "@/lib/utils/error-handler";
 import { getPrisma } from "@/lib/db";
 
 // DELETE /api/upload/[fileName] - Delete all chunks of a file
@@ -8,14 +9,12 @@ export async function DELETE(
   { params }: { params: Promise<{ fileName: string }> }
 ) {
   try {
-    // Get the authenticated user's ID
-    const { userId } = await auth();
-    if (!userId) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      );
+    // Authenticate user using middleware
+    const authResult = await requireAuth();
+    if (!isAuthSuccess(authResult)) {
+      return authResult.error;
     }
+    const { userId } = authResult;
 
     const { fileName: encodedFileName } = await params;
     const fileName = decodeURIComponent(encodedFileName);
@@ -30,10 +29,7 @@ export async function DELETE(
     `;
 
     if (result === 0) {
-      return NextResponse.json(
-        { error: "Document not found" },
-        { status: 404 }
-      );
+      return ErrorHandler.notFound("Document not found");
     }
 
     return NextResponse.json({
@@ -41,12 +37,7 @@ export async function DELETE(
       deletedChunks: result,
     });
   } catch (error) {
-    console.error("Delete error:", error);
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
-    return NextResponse.json(
-      { error: `Failed to delete document: ${errorMessage}` },
-      { status: 500 }
-    );
+    return ErrorHandler.handleRouteError(error, "Failed to delete document");
   }
 }
 
@@ -56,14 +47,12 @@ export async function PATCH(
   { params }: { params: Promise<{ fileName: string }> }
 ) {
   try {
-    // Get the authenticated user's ID
-    const { userId } = await auth();
-    if (!userId) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      );
+    // Authenticate user using middleware
+    const authResult = await requireAuth();
+    if (!isAuthSuccess(authResult)) {
+      return authResult.error;
     }
+    const { userId } = authResult;
 
     const { fileName: encodedFileName } = await params;
     const oldFileName = decodeURIComponent(encodedFileName);
@@ -71,10 +60,7 @@ export async function PATCH(
     const { newFileName } = body;
 
     if (!newFileName || !newFileName.trim()) {
-      return NextResponse.json(
-        { error: "New file name is required" },
-        { status: 400 }
-      );
+      return ErrorHandler.badRequest("New file name is required");
     }
 
     const db = getPrisma();
@@ -89,10 +75,7 @@ export async function PATCH(
     `;
 
     if (result === 0) {
-      return NextResponse.json(
-        { error: "Document not found" },
-        { status: 404 }
-      );
+      return ErrorHandler.notFound("Document not found");
     }
 
     return NextResponse.json({
@@ -100,11 +83,6 @@ export async function PATCH(
       updatedChunks: result,
     });
   } catch (error) {
-    console.error("Rename error:", error);
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
-    return NextResponse.json(
-      { error: `Failed to rename document: ${errorMessage}` },
-      { status: 500 }
-    );
+    return ErrorHandler.handleRouteError(error, "Failed to rename document");
   }
 }

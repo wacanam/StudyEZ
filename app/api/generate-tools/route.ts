@@ -1,16 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
+import { requireAuth, isAuthSuccess } from "@/lib/middleware/auth-middleware";
+import { ErrorHandler } from "@/lib/utils/error-handler";
+import { AIResponseParser } from "@/lib/utils/ai-response-parser";
 import { searchSimilarDocuments } from "@/lib/db";
 import { generateEmbedding } from "@/lib/rag";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { getAIClient } from "@/lib/ai-client";
 import { getPrisma } from "@/lib/db";
 
-function getGenAI(): GoogleGenerativeAI {
-  const apiKey = process.env.GOOGLE_API_KEY;
-  if (!apiKey) {
-    throw new Error("GOOGLE_API_KEY environment variable is not set");
-  }
-  return new GoogleGenerativeAI(apiKey);
+function getGenAI() {
+  return getAIClient();
 }
 
 interface Flashcard {
@@ -27,22 +25,18 @@ interface QuizQuestion {
 
 export async function POST(request: NextRequest) {
   try {
-    const { userId } = await auth();
-    if (!userId) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      );
+    // Authenticate user using middleware
+    const authResult = await requireAuth();
+    if (!isAuthSuccess(authResult)) {
+      return authResult.error;
     }
+    const { userId } = authResult;
 
     const body = await request.json();
     const { topic } = body;
 
     if (!topic || typeof topic !== "string") {
-      return NextResponse.json(
-        { error: "Topic is required" },
-        { status: 400 }
-      );
+      return ErrorHandler.badRequest("Topic is required");
     }
 
     // Generate embedding for the topic
@@ -52,9 +46,7 @@ export async function POST(request: NextRequest) {
     const similarDocs = await searchSimilarDocuments(topicEmbedding, userId, 10);
 
     if (similarDocs.length === 0) {
-      return NextResponse.json({
-        error: "No relevant study materials found. Please upload some documents first.",
-      }, { status: 404 });
+      return ErrorHandler.notFound("No relevant study materials found. Please upload some documents first.");
     }
 
     // Combine document content for context
@@ -101,27 +93,25 @@ Important:
     const result = await model.generateContent(prompt);
     const responseText = result.response.text();
 
-    // Parse the JSON response
+    // Parse the JSON response using AIResponseParser
     let data;
     try {
-      // Try to extract JSON from the response if it contains markdown code blocks
-      const jsonMatch = responseText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-      const jsonText = jsonMatch ? jsonMatch[1] : responseText;
-      data = JSON.parse(jsonText);
+      data = AIResponseParser.extractJSON<{
+        flashcards: Flashcard[];
+        quizzes: QuizQuestion[];
+      }>(responseText);
     } catch (parseError) {
       console.error("Failed to parse Gemini response:", responseText);
-      return NextResponse.json(
-        { error: "Failed to parse generated content. Please try again." },
-        { status: 500 }
+      return ErrorHandler.createErrorResponse(
+        parseError,
+        "Failed to parse generated content. Please try again",
+        500
       );
     }
 
     // Validate the response structure
     if (!data.flashcards || !data.quizzes || !Array.isArray(data.flashcards) || !Array.isArray(data.quizzes)) {
-      return NextResponse.json(
-        { error: "Invalid response format from AI. Please try again." },
-        { status: 500 }
-      );
+      return ErrorHandler.badRequest("Invalid response format from AI. Please try again.");
     }
 
     // Store flashcards in database
@@ -159,25 +149,19 @@ Important:
       quizzes: data.quizzes,
     });
   } catch (error) {
-    console.error("Generate tools error:", error);
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
-    return NextResponse.json(
-      { error: `Failed to generate study tools: ${errorMessage}` },
-      { status: 500 }
-    );
+    return ErrorHandler.handleRouteError(error, "Failed to generate study tools");
   }
 }
 
 // GET endpoint to retrieve stored flashcards and quizzes
 export async function GET(request: NextRequest) {
   try {
-    const { userId } = await auth();
-    if (!userId) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      );
+    // Authenticate user using middleware
+    const authResult = await requireAuth();
+    if (!isAuthSuccess(authResult)) {
+      return authResult.error;
     }
+    const { userId } = authResult;
 
     const db = getPrisma();
 
@@ -196,11 +180,6 @@ export async function GET(request: NextRequest) {
       quizzes,
     });
   } catch (error) {
-    console.error("Get tools error:", error);
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
-    return NextResponse.json(
-      { error: `Failed to retrieve study tools: ${errorMessage}` },
-      { status: 500 }
-    );
+    return ErrorHandler.handleRouteError(error, "Failed to retrieve study tools");
   }
 }

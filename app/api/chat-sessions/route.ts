@@ -1,17 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
+import { requireAuth, isAuthSuccess } from "@/lib/middleware/auth-middleware";
+import { ErrorHandler } from "@/lib/utils/error-handler";
 import { getPrisma } from "@/lib/db";
 
 // GET all chat sessions for the authenticated user
 export async function GET(request: NextRequest) {
   try {
-    const { userId } = await auth();
-    if (!userId) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      );
+    // Authenticate user using middleware
+    const authResult = await requireAuth();
+    if (!isAuthSuccess(authResult)) {
+      return authResult.error;
     }
+    const { userId } = authResult;
 
     const db = getPrisma();
 
@@ -28,25 +28,19 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ sessions });
   } catch (error) {
-    console.error("Get chat sessions error:", error);
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
-    return NextResponse.json(
-      { error: `Failed to retrieve chat sessions: ${errorMessage}` },
-      { status: 500 }
-    );
+    return ErrorHandler.handleRouteError(error, "Failed to retrieve chat sessions");
   }
 }
 
 // DELETE all chat sessions for the authenticated user
 export async function DELETE(request: NextRequest) {
   try {
-    const { userId } = await auth();
-    if (!userId) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      );
+    // Authenticate user using middleware
+    const authResult = await requireAuth();
+    if (!isAuthSuccess(authResult)) {
+      return authResult.error;
     }
+    const { userId } = authResult;
 
     const db = getPrisma();
 
@@ -57,11 +51,6 @@ export async function DELETE(request: NextRequest) {
 
     return NextResponse.json({ message: "Chat history cleared successfully" });
   } catch (error) {
-    console.error("Delete chat sessions error:", error);
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
-    return NextResponse.json(
-      { error: `Failed to clear chat history: ${errorMessage}` },
-      { status: 500 }
-    );
+    return ErrorHandler.handleRouteError(error, "Failed to clear chat history");
   }
 }

@@ -1,19 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
+import { requireAuth, isAuthSuccess } from "@/lib/middleware/auth-middleware";
+import { ErrorHandler } from "@/lib/utils/error-handler";
 import { initializeDatabase, storeDocument } from "@/lib/db";
 import { generateEmbedding, chunkText } from "@/lib/rag";
 import { extractContentFromUrl } from "@/lib/content-extractors";
 
 export async function POST(request: NextRequest) {
   try {
-    // Get the authenticated user's ID
-    const { userId } = await auth();
-    if (!userId) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      );
+    // Authenticate user using middleware
+    const authResult = await requireAuth();
+    if (!isAuthSuccess(authResult)) {
+      return authResult.error;
     }
+    const { userId } = authResult;
 
     // Initialize database tables if needed
     await initializeDatabase();
@@ -22,20 +21,14 @@ export async function POST(request: NextRequest) {
     const { url } = body;
 
     if (!url || typeof url !== "string") {
-      return NextResponse.json(
-        { error: "URL is required" },
-        { status: 400 }
-      );
+      return ErrorHandler.badRequest("URL is required");
     }
 
     // Validate URL format
     try {
       new URL(url);
     } catch {
-      return NextResponse.json(
-        { error: "Invalid URL format" },
-        { status: 400 }
-      );
+      return ErrorHandler.badRequest("Invalid URL format");
     }
 
     console.log(`Processing URL: ${url}`);
@@ -44,10 +37,7 @@ export async function POST(request: NextRequest) {
     const { content, type } = await extractContentFromUrl(url);
 
     if (!content.trim()) {
-      return NextResponse.json(
-        { error: "No content extracted from URL" },
-        { status: 400 }
-      );
+      return ErrorHandler.badRequest("No content extracted from URL");
     }
 
     console.log(`Extracted ${content.length} characters from ${type}: ${url}`);
@@ -78,11 +68,6 @@ export async function POST(request: NextRequest) {
       type,
     });
   } catch (error) {
-    console.error("Link upload error:", error);
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
-    return NextResponse.json(
-      { error: `Failed to process URL: ${errorMessage}` },
-      { status: 500 }
-    );
+    return ErrorHandler.handleRouteError(error, "Failed to process URL");
   }
 }

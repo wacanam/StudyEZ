@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
+import { requireAuth, isAuthSuccess } from "@/lib/middleware/auth-middleware";
+import { ErrorHandler } from "@/lib/utils/error-handler";
 import { getPrisma } from "@/lib/db";
 
 // GET messages for a specific chat session
@@ -8,22 +9,18 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { userId } = await auth();
-    if (!userId) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      );
+    // Authenticate user using middleware
+    const authResult = await requireAuth();
+    if (!isAuthSuccess(authResult)) {
+      return authResult.error;
     }
+    const { userId } = authResult;
 
     const { id } = await params;
     const sessionId = parseInt(id, 10);
 
     if (isNaN(sessionId)) {
-      return NextResponse.json(
-        { error: "Invalid session ID" },
-        { status: 400 }
-      );
+      return ErrorHandler.badRequest("Invalid session ID");
     }
 
     const db = getPrisma();
@@ -39,19 +36,11 @@ export async function GET(
     });
 
     if (!session) {
-      return NextResponse.json(
-        { error: "Session not found" },
-        { status: 404 }
-      );
+      return ErrorHandler.notFound("Session not found");
     }
 
     return NextResponse.json({ session });
   } catch (error) {
-    console.error("Get chat messages error:", error);
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
-    return NextResponse.json(
-      { error: `Failed to retrieve chat messages: ${errorMessage}` },
-      { status: 500 }
-    );
+    return ErrorHandler.handleRouteError(error, "Failed to retrieve chat messages");
   }
 }
