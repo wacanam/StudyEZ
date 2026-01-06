@@ -4,6 +4,8 @@ import * as cheerio from "cheerio";
 // Configuration constants
 const FETCH_TIMEOUT_MS = 30000; // 30 seconds
 const MIN_CONTENT_LENGTH = 100; // Minimum characters for valid content
+const USER_AGENT = "Mozilla/5.0 (compatible; StudyEZ/1.0; +https://studyez.app)";
+
 
 /**
  * Extract YouTube video ID from various YouTube URL formats
@@ -62,7 +64,7 @@ export async function scrapeWebPage(url: string): Promise<string> {
 
     const response = await fetch(url, {
       headers: {
-        "User-Agent": "Mozilla/5.0 (compatible; StudyEZ/1.0; +https://studyez.app)",
+        "User-Agent": USER_AGENT,
       },
       signal: controller.signal,
     });
@@ -129,7 +131,7 @@ export async function scrapeWebPage(url: string): Promise<string> {
 /**
  * Check if URL is a valid YouTube URL
  */
-function isYouTubeUrl(url: string): boolean {
+export function isYouTubeUrl(url: string): boolean {
   try {
     const urlObj = new URL(url);
     const hostname = urlObj.hostname.toLowerCase();

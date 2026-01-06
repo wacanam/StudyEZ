@@ -416,7 +416,7 @@ export default function Dashboard() {
                     type="url"
                     value={linkUrl}
                     onChange={(e) => setLinkUrl(e.target.value)}
-                    placeholder="Enter YouTube URL or webpage link..."
+                    placeholder="Enter YouTube URL or educational website link..."
                     className="flex-1 px-4 py-3 rounded-lg border border-ink/20 bg-background focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent text-ink placeholder:text-ink/40"
                   />
                   <button
