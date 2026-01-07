@@ -12,9 +12,17 @@ interface DocumentFile {
 
 interface DocumentListProps {
   onUpdate?: () => void;
+  selectionMode?: boolean;
+  selectedDocumentIds?: number[];
+  onSelectionChange?: (documentIds: number[]) => void;
 }
 
-export default function DocumentList({ onUpdate }: DocumentListProps) {
+export default function DocumentList({ 
+  onUpdate, 
+  selectionMode = false,
+  selectedDocumentIds = [],
+  onSelectionChange 
+}: DocumentListProps) {
   const [files, setFiles] = useState<DocumentFile[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -129,6 +137,42 @@ export default function DocumentList({ onUpdate }: DocumentListProps) {
     file.fileName.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  // Selection handlers
+  const handleFileToggle = (file: DocumentFile) => {
+    if (!onSelectionChange) return;
+    
+    const fileDocIds = file.documentIds;
+    const selectedSet = new Set(selectedDocumentIds);
+    const isSelected = fileDocIds.every(id => selectedSet.has(id));
+    
+    if (isSelected) {
+      // Deselect: remove all document IDs for this file
+      onSelectionChange(selectedDocumentIds.filter(id => !fileDocIds.includes(id)));
+    } else {
+      // Select: add all document IDs for this file that aren't already selected
+      const newIds = fileDocIds.filter(id => !selectedSet.has(id));
+      onSelectionChange([...selectedDocumentIds, ...newIds]);
+    }
+  };
+
+  const handleSelectAll = () => {
+    if (!onSelectionChange) return;
+    // Use Set to ensure uniqueness
+    const allDocIds = Array.from(new Set(filteredFiles.flatMap(file => file.documentIds)));
+    onSelectionChange(allDocIds);
+  };
+
+  const handleClearSelection = () => {
+    if (!onSelectionChange) return;
+    onSelectionChange([]);
+  };
+
+  const isFileSelected = (file: DocumentFile): boolean => {
+    // Use Set for O(1) lookup performance
+    const selectedSet = new Set(selectedDocumentIds);
+    return file.documentIds.every(id => selectedSet.has(id));
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -212,9 +256,32 @@ export default function DocumentList({ onUpdate }: DocumentListProps) {
         </div>
       ) : (
         <div className="space-y-3">
-          <p className="text-sm text-ink/60">
-            Showing {filteredFiles.length} of {files.length} document{files.length !== 1 ? "s" : ""}
-          </p>
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-ink/60">
+              Showing {filteredFiles.length} of {files.length} document{files.length !== 1 ? "s" : ""}
+              {selectionMode && selectedDocumentIds.length > 0 && (
+                <span className="ml-2 text-accent font-medium">
+                  ({selectedDocumentIds.length} chunk{selectedDocumentIds.length !== 1 ? "s" : ""} selected)
+                </span>
+              )}
+            </p>
+            {selectionMode && (
+              <div className="flex gap-2">
+                <button
+                  onClick={handleSelectAll}
+                  className="px-3 py-1 text-sm bg-accent/10 text-accent rounded-lg hover:bg-accent/20 transition-colors"
+                >
+                  Select All
+                </button>
+                <button
+                  onClick={handleClearSelection}
+                  className="px-3 py-1 text-sm bg-ink/10 text-ink rounded-lg hover:bg-ink/20 transition-colors"
+                >
+                  Clear
+                </button>
+              </div>
+            )}
+          </div>
           {filteredFiles.map((file) => (
             <div
               key={file.fileName}
@@ -251,39 +318,53 @@ export default function DocumentList({ onUpdate }: DocumentListProps) {
                   </div>
                 </div>
               ) : (
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-semibold text-ink truncate">
-                      📄 {file.fileName}
-                    </h3>
-                    <div className="flex gap-4 mt-2 text-sm text-ink/60">
-                      <span>{file.chunkCount} chunk{file.chunkCount !== 1 ? "s" : ""}</span>
-                      <span>•</span>
-                      <span>
-                        {new Date(file.uploadDate).toLocaleDateString()}
-                      </span>
+                <div className="flex items-start gap-4">
+                  {selectionMode && (
+                    <div className="flex items-center pt-1">
+                      <input
+                        type="checkbox"
+                        checked={isFileSelected(file)}
+                        onChange={() => handleFileToggle(file)}
+                        className="w-5 h-5 text-accent bg-background border-ink/20 rounded focus:ring-2 focus:ring-accent cursor-pointer"
+                      />
                     </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => {
-                        setRenamingFile(file.fileName);
-                        setNewFileName(file.fileName);
-                      }}
-                      disabled={actionLoading === file.fileName}
-                      className="px-3 py-1 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm"
-                      title="Rename"
-                    >
-                      ✏️ Rename
-                    </button>
-                    <button
-                      onClick={() => handleDeleteClick(file.fileName)}
-                      disabled={actionLoading === file.fileName}
-                      className="px-3 py-1 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm"
-                      title="Delete"
-                    >
-                      {actionLoading === file.fileName ? "Deleting..." : "🗑️ Delete"}
-                    </button>
+                  )}
+                  <div className="flex-1 min-w-0 flex items-start justify-between gap-4">
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-semibold text-ink truncate">
+                        📄 {file.fileName}
+                      </h3>
+                      <div className="flex gap-4 mt-2 text-sm text-ink/60">
+                        <span>{file.chunkCount} chunk{file.chunkCount !== 1 ? "s" : ""}</span>
+                        <span>•</span>
+                        <span>
+                          {new Date(file.uploadDate).toLocaleDateString()}
+                        </span>
+                      </div>
+                    </div>
+                    {!selectionMode && (
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => {
+                            setRenamingFile(file.fileName);
+                            setNewFileName(file.fileName);
+                          }}
+                          disabled={actionLoading === file.fileName}
+                          className="px-3 py-1 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm"
+                          title="Rename"
+                        >
+                          ✏️ Rename
+                        </button>
+                        <button
+                          onClick={() => handleDeleteClick(file.fileName)}
+                          disabled={actionLoading === file.fileName}
+                          className="px-3 py-1 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm"
+                          title="Delete"
+                        >
+                          {actionLoading === file.fileName ? "Deleting..." : "🗑️ Delete"}
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

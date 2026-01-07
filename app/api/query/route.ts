@@ -16,10 +16,46 @@ export async function POST(request: NextRequest) {
     const { userId } = authResult;
 
     const body = await request.json();
-    const { query, sessionId } = body;
+    const { query, sessionId, selectedDocumentIds } = body;
 
     if (!query || typeof query !== "string") {
       return ErrorHandler.badRequest("Query is required");
+    }
+
+    // Validate selectedDocumentIds if provided
+    let documentIds: number[] | undefined;
+    if (selectedDocumentIds !== undefined) {
+      if (!Array.isArray(selectedDocumentIds)) {
+        return ErrorHandler.badRequest("selectedDocumentIds must be an array");
+      }
+      // Validate all elements are numbers
+      if (!selectedDocumentIds.every((id: unknown) => typeof id === "number" && Number.isInteger(id))) {
+        return ErrorHandler.badRequest("All document IDs must be integers");
+      }
+      // Only proceed with filtering if we have IDs, empty array means no results
+      if (selectedDocumentIds.length > 0) {
+        // Verify that all selected documents belong to the authenticated user
+        const db = getPrisma();
+        const userDocuments = await db.document.findMany({
+          where: {
+            id: { in: selectedDocumentIds },
+            userId: userId,
+          },
+          select: { id: true },
+        });
+        
+        // If any document IDs don't belong to the user, reject the request
+        if (userDocuments.length !== selectedDocumentIds.length) {
+          return ErrorHandler.badRequest(
+            "Invalid document IDs: some documents do not exist or do not belong to you"
+          );
+        }
+        
+        documentIds = selectedDocumentIds;
+      } else {
+        // Empty array means search nothing (no results)
+        documentIds = [];
+      }
     }
 
     // Initialize database if needed
@@ -29,7 +65,8 @@ export async function POST(request: NextRequest) {
     const queryEmbedding = await generateEmbedding(query);
 
     // Hybrid search: retrieve top 10 candidates using vector + FTS
-    const candidateDocs = await hybridSearch(query, queryEmbedding, userId, 10);
+    // If documentIds is provided, only search within those documents
+    const candidateDocs = await hybridSearch(query, queryEmbedding, userId, 10, documentIds);
 
     if (candidateDocs.length === 0) {
       return ApiResponseBuilder.success({
