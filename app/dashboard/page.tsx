@@ -152,6 +152,7 @@ export default function Dashboard() {
   const { messages: toastMessages, showToast, closeToast } = useToast();
   const [uploadMode, setUploadMode] = useState<UploadMode>("files");
   const [linkUrl, setLinkUrl] = useState("");
+  const [selectedDocumentIds, setSelectedDocumentIds] = useState<number[]>([]);
 
   const addLog = (message: string) => {
     const timestamp = new Date().toLocaleTimeString();
@@ -433,6 +434,7 @@ export default function Dashboard() {
         body: JSON.stringify({
           query,
           sessionId: currentSessionId,
+          selectedDocumentIds: selectedDocumentIds.length > 0 ? selectedDocumentIds : undefined,
         }),
       });
 
@@ -883,6 +885,27 @@ export default function Dashboard() {
                   {isQuerying ? "Querying..." : "Ask"}
                 </button>
               </form>
+
+              {/* Document Selection Section */}
+              <div className="mt-6">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-semibold text-ink">
+                    📎 Select Documents for Context
+                  </h3>
+                  {selectedDocumentIds.length === 0 && (
+                    <span className="text-xs text-ink/50">
+                      (All documents will be used if none selected)
+                    </span>
+                  )}
+                </div>
+                <div className="bg-background rounded-lg p-4 max-h-80 overflow-y-auto">
+                  <DocumentList
+                    selectionMode={true}
+                    selectedDocumentIds={selectedDocumentIds}
+                    onSelectionChange={setSelectedDocumentIds}
+                  />
+                </div>
+              </div>
             </section>
           )}
 
