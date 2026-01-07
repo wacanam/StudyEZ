@@ -16,10 +16,19 @@ export async function POST(request: NextRequest) {
     const { userId } = authResult;
 
     const body = await request.json();
-    const { query, sessionId } = body;
+    const { query, sessionId, selectedDocumentIds } = body;
 
     if (!query || typeof query !== "string") {
       return ErrorHandler.badRequest("Query is required");
+    }
+
+    // Validate selectedDocumentIds if provided
+    let documentIds: number[] | undefined;
+    if (selectedDocumentIds !== undefined) {
+      if (!Array.isArray(selectedDocumentIds)) {
+        return ErrorHandler.badRequest("selectedDocumentIds must be an array");
+      }
+      documentIds = selectedDocumentIds;
     }
 
     // Initialize database if needed
@@ -29,7 +38,8 @@ export async function POST(request: NextRequest) {
     const queryEmbedding = await generateEmbedding(query);
 
     // Hybrid search: retrieve top 10 candidates using vector + FTS
-    const candidateDocs = await hybridSearch(query, queryEmbedding, userId, 10);
+    // If documentIds is provided, only search within those documents
+    const candidateDocs = await hybridSearch(query, queryEmbedding, userId, 10, documentIds);
 
     if (candidateDocs.length === 0) {
       return ApiResponseBuilder.success({
