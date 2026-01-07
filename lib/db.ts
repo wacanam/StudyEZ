@@ -134,7 +134,16 @@ export async function searchSimilarDocuments(
 /**
  * Hybrid search combining vector similarity and full-text search
  * Uses Reciprocal Rank Fusion (RRF) to combine rankings from both methods
- * @param documentIds - Optional array of document IDs to restrict search to specific documents
+ * 
+ * @param query - The search query string
+ * @param embedding - The query embedding vector
+ * @param userId - User ID to filter documents
+ * @param limit - Maximum number of results to return
+ * @param documentIds - Optional array of document IDs to restrict search.
+ *   - If undefined: searches all user's documents (default behavior)
+ *   - If empty array: returns empty results (no documents to search)
+ *   - If non-empty array: only searches within the specified document IDs
+ *   - All IDs must be valid integers belonging to the user (validated by caller)
  */
 export async function hybridSearch(
   query: string,
@@ -151,6 +160,12 @@ export async function hybridSearch(
   const hasDocumentFilter = documentIds && documentIds.length > 0;
 
   if (hasDocumentFilter) {
+    // Safety check: ensure all IDs are integers (should be validated by caller)
+    // This protects against SQL injection via array casting
+    if (!documentIds.every(id => Number.isInteger(id))) {
+      throw new Error("All document IDs must be integers");
+    }
+
     // Perform hybrid search with document ID filtering
     // k=60 is a common constant for RRF
     const results = await db.$queryRaw<

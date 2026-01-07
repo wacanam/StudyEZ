@@ -142,20 +142,23 @@ export default function DocumentList({
     if (!onSelectionChange) return;
     
     const fileDocIds = file.documentIds;
-    const isSelected = fileDocIds.every(id => selectedDocumentIds.includes(id));
+    const selectedSet = new Set(selectedDocumentIds);
+    const isSelected = fileDocIds.every(id => selectedSet.has(id));
     
     if (isSelected) {
       // Deselect: remove all document IDs for this file
       onSelectionChange(selectedDocumentIds.filter(id => !fileDocIds.includes(id)));
     } else {
-      // Select: add all document IDs for this file
-      onSelectionChange([...selectedDocumentIds, ...fileDocIds]);
+      // Select: add all document IDs for this file that aren't already selected
+      const newIds = fileDocIds.filter(id => !selectedSet.has(id));
+      onSelectionChange([...selectedDocumentIds, ...newIds]);
     }
   };
 
   const handleSelectAll = () => {
     if (!onSelectionChange) return;
-    const allDocIds = filteredFiles.flatMap(file => file.documentIds);
+    // Use Set to ensure uniqueness
+    const allDocIds = Array.from(new Set(filteredFiles.flatMap(file => file.documentIds)));
     onSelectionChange(allDocIds);
   };
 
@@ -165,7 +168,9 @@ export default function DocumentList({
   };
 
   const isFileSelected = (file: DocumentFile): boolean => {
-    return file.documentIds.every(id => selectedDocumentIds.includes(id));
+    // Use Set for O(1) lookup performance
+    const selectedSet = new Set(selectedDocumentIds);
+    return file.documentIds.every(id => selectedSet.has(id));
   };
 
   if (loading) {
