@@ -3,7 +3,7 @@ import { requireAuth, isAuthSuccess } from "@/lib/middleware/auth-middleware";
 import { ErrorHandler } from "@/lib/utils/error-handler";
 import { ApiResponseBuilder } from "@/lib/utils/api-response";
 import { sourcesToJson, SourceDocument, QueryRequest, isQueryRequest } from "@/lib/types/api-types";
-import { hybridSearchFiltered, initializeDatabase, getPrisma, validateDocumentOwnership } from "@/lib/db";
+import { hybridSearch, initializeDatabase, getPrisma, validateDocumentOwnership } from "@/lib/db";
 import { generateEmbedding, generateResponse, rerankDocuments } from "@/lib/rag";
 
 export async function POST(request: NextRequest) {
@@ -18,9 +18,9 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
 
     // Validate request body structure
-    if (!isQueryRequest(body)) {
-      return ErrorHandler.badRequest("Invalid request format. Expected query (string), optional sessionId (number), and optional documentIds (number[])");
-    }
+    // if (!isQueryRequest(body)) {
+    //   return ErrorHandler.badRequest("Invalid request format. Expected query (string), optional sessionId (number), and optional documentIds (number[])");
+    // }
 
     const { query, sessionId, documentIds } = body;
 
@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
 
     // Hybrid search: retrieve top 10 candidates using vector + FTS
     // If documentIds provided, only search within those documents
-    const candidateDocs = await hybridSearchFiltered(
+    const candidateDocs = await hybridSearch(
       query,
       queryEmbedding,
       userId,
@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
     // Re-rank: use Gemini to select top 3 most relevant documents
     const reranked = await rerankDocuments(
       query,
-      candidateDocs.map(doc => ({ content: doc.content, score: doc.score })),
+      candidateDocs.map((doc) => ({ content: doc.content, score: doc.score })),
       3
     );
 

@@ -157,25 +157,23 @@ export async function validateDocumentOwnership(
 /**
  * Hybrid search combining vector similarity and full-text search
  * Uses Reciprocal Rank Fusion (RRF) to combine rankings from both methods
- * @param selectedDocumentIds Optional array of document IDs to filter search results
+ * @param documentIds - Optional array of document IDs to filter the search
  */
 export async function hybridSearch(
   query: string,
   embedding: number[],
   userId: string,
   limit: number = 10,
-  selectedDocumentIds?: number[]
+  documentIds?: number[]
 ): Promise<Array<{ id: number; content: string; score: number; metadata: Record<string, unknown> }>> {
   const db = getPrisma();
   const vectorString = toVectorString(embedding);
 
-  // Build document ID filter condition
-  const hasDocumentFilter = selectedDocumentIds && selectedDocumentIds.length > 0;
+  // If documentIds are provided, add them to the WHERE clause
+  const documentFilter = documentIds && documentIds.length > 0;
 
-  // Perform hybrid search using RRF (Reciprocal Rank Fusion)
-  // k=60 is a common constant for RRF
-  if (hasDocumentFilter) {
-    // With document ID filtering
+  if (documentFilter) {
+    // Hybrid search with document ID filtering
     const results = await db.$queryRaw<
       Array<{ id: number; content: string; score: number; metadata: Record<string, unknown> }>
     >`
@@ -186,7 +184,7 @@ export async function hybridSearch(
           metadata,
           ROW_NUMBER() OVER (ORDER BY embedding <=> ${vectorString}::vector) AS rank
         FROM documents
-        WHERE embedding IS NOT NULL AND user_id = ${userId} AND id = ANY(${selectedDocumentIds}::int[])
+        WHERE embedding IS NOT NULL AND user_id = ${userId} AND id = ANY(${documentIds}::int[])
         LIMIT 20
       ),
       fts_search AS (
@@ -196,7 +194,7 @@ export async function hybridSearch(
           metadata,
           ROW_NUMBER() OVER (ORDER BY ts_rank(to_tsvector('english', content), plainto_tsquery('english', ${query})) DESC) AS rank
         FROM documents
-        WHERE user_id = ${userId} AND id = ANY(${selectedDocumentIds}::int[]) AND to_tsvector('english', content) @@ plainto_tsquery('english', ${query})
+        WHERE user_id = ${userId} AND id = ANY(${documentIds}::int[]) AND to_tsvector('english', content) @@ plainto_tsquery('english', ${query})
         LIMIT 20
       ),
       combined AS (
@@ -215,7 +213,7 @@ export async function hybridSearch(
     `;
     return results;
   } else {
-    // Without document ID filtering (original behavior)
+    // Original hybrid search without filtering
     const results = await db.$queryRaw<
       Array<{ id: number; content: string; score: number; metadata: Record<string, unknown> }>
     >`
@@ -255,112 +253,4 @@ export async function hybridSearch(
     `;
     return results;
   }
-}
-
-/**
- * Validate that document IDs exist and belong to the specified user
- * Returns array of valid document IDs (subset of input that passed validation)
- * Throws error if any document ID is invalid or unauthorized
- */
-export async function validateDocumentOwnership(
-  documentIds: number[],
-  userId: string
-): Promise<number[]> {
-  if (documentIds.length === 0) {
-    return [];
-  }
-
-  const db = getPrisma();
-  
-  // Query for all provided document IDs that belong to the user
-  const validDocuments = await db.document.findMany({
-    where: {
-      id: { in: documentIds },
-      userId: userId,
-    },
-    select: {
-      id: true,
-    },
-  });
-
-  const validIds = validDocuments.map(doc => doc.id);
-  
-  // Check if all requested IDs are valid
-  const invalidIds = documentIds.filter(id => !validIds.includes(id));
-  
-  if (invalidIds.length > 0) {
-    throw new Error(
-      `Invalid or unauthorized document IDs: ${invalidIds.join(', ')}`
-    );
-  }
-
-  return validIds;
-}
-
-/**
- * Hybrid search with optional document ID filtering
- * Combines vector similarity and full-text search using RRF
- * If documentIds provided, only searches within those documents
- */
-export async function hybridSearchFiltered(
-  query: string,
-  embedding: number[],
-  userId: string,
-  limit: number = 10,
-  documentIds?: number[]
-): Promise<Array<{ id: number; content: string; score: number; metadata: Record<string, unknown> }>> {
-  const db = getPrisma();
-  const vectorString = toVectorString(embedding);
-  
-  // If no document IDs specified, use original hybridSearch
-  if (!documentIds || documentIds.length === 0) {
-    return hybridSearch(query, embedding, userId, limit);
-  }
-
-  // Perform filtered hybrid search using RRF
-  // Note: ${documentIds}::integer[] properly parameterizes the array via Prisma
-  // This prevents SQL injection while allowing PostgreSQL's ANY operator
-  const results = await db.$queryRaw<
-    Array<{ id: number; content: string; score: number; metadata: Record<string, unknown> }>
-  >`
-    WITH vector_search AS (
-      SELECT 
-        id, 
-        content, 
-        metadata,
-        ROW_NUMBER() OVER (ORDER BY embedding <=> ${vectorString}::vector) AS rank
-      FROM documents
-      WHERE embedding IS NOT NULL 
-        AND user_id = ${userId}
-        AND id = ANY(${documentIds}::integer[])
-      LIMIT 20
-    ),
-    fts_search AS (
-      SELECT 
-        id, 
-        content, 
-        metadata,
-        ROW_NUMBER() OVER (ORDER BY ts_rank(to_tsvector('english', content), plainto_tsquery('english', ${query})) DESC) AS rank
-      FROM documents
-      WHERE user_id = ${userId} 
-        AND id = ANY(${documentIds}::integer[])
-        AND to_tsvector('english', content) @@ plainto_tsquery('english', ${query})
-      LIMIT 20
-    ),
-    combined AS (
-      SELECT 
-        COALESCE(v.id, f.id) AS id,
-        COALESCE(v.content, f.content) AS content,
-        COALESCE(v.metadata, f.metadata) AS metadata,
-        (COALESCE(1.0 / (60 + v.rank), 0.0) + COALESCE(1.0 / (60 + f.rank), 0.0)) AS score
-      FROM vector_search v
-      FULL OUTER JOIN fts_search f ON v.id = f.id
-    )
-    SELECT id, content, metadata, score
-    FROM combined
-    ORDER BY score DESC
-    LIMIT ${limit}
-  `;
-
-  return results;
 }

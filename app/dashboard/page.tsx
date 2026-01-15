@@ -424,7 +424,12 @@ export default function Dashboard() {
 
     setIsQuerying(true);
     setResponse(null);
-    addLog(`Querying: "${query}"`);
+
+    // Log selection context
+    const contextMsg = selectedDocumentIds.length > 0
+      ? ` (filtering ${selectedDocumentIds.length} document chunks)`
+      : " (searching all documents)";
+    addLog(`Querying: "${query}"${contextMsg}`);
 
     try {
       const res = await fetch("/api/query", {
@@ -435,7 +440,7 @@ export default function Dashboard() {
         body: JSON.stringify({
           query,
           sessionId: currentSessionId,
-          selectedDocumentIds: selectedDocumentIds.length > 0 ? selectedDocumentIds : undefined,
+          documentIds: selectedDocumentIds.length > 0 ? selectedDocumentIds : undefined,
         }),
       });
 
@@ -807,23 +812,73 @@ export default function Dashboard() {
 
           {/* Query Section - shown when in Q&A mode */}
           {studyMode === "query" && (
-            <section className="bg-surface rounded-xl p-6 mb-8 shadow-sm">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-semibold text-ink">
-                  🔍 Ask a Question
-                </h2>
-                <div className="flex items-center gap-3">
-                  {/* Hands-Free Mode Toggle */}
+            <>
+              {/* Document Context Selector */}
+              <DocumentSelector
+                selectedDocumentIds={selectedDocumentIds}
+                onSelectionChange={setSelectedDocumentIds}
+                className="mb-4"
+              />
+
+              <section className="bg-surface rounded-xl p-6 mb-8 shadow-sm">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-xl font-semibold text-ink">
+                    🔍 Ask a Question
+                  </h2>
+                  <div className="flex items-center gap-3">
+                    {/* Hands-Free Mode Toggle */}
+                    <button
+                      onClick={toggleHandsFreeMode}
+                      className={`flex items-center gap-2 px-3 py-1 text-sm rounded-lg transition-colors ${isHandsFreeModeEnabled
+                        ? 'bg-accent text-white'
+                        : 'bg-accent/10 text-accent hover:bg-accent/20'
+                        }`}
+                      title="Auto-read answers aloud"
+                    >
+                      <svg
+                        className="w-4 h-4"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"
+                        />
+                      </svg>
+                      Hands-Free
+                    </button>
+                    {currentSessionId && (
+                      <button
+                        onClick={handleNewChat}
+                        className="px-3 py-1 text-sm bg-accent/10 text-accent rounded-lg hover:bg-accent/20 transition-colors"
+                      >
+                        + New Chat
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <form onSubmit={handleQuery} className="flex gap-3">
+                  <input
+                    type="text"
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    placeholder="Enter your study question..."
+                    className="flex-1 px-4 py-3 rounded-lg border border-ink/20 bg-background focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent text-ink placeholder:text-ink/40"
+                  />
                   <button
-                    onClick={toggleHandsFreeMode}
-                    className={`flex items-center gap-2 px-3 py-1 text-sm rounded-lg transition-colors ${isHandsFreeModeEnabled
-                      ? 'bg-accent text-white'
+                    type="button"
+                    onClick={toggleVoiceInput}
+                    className={`px-4 py-3 rounded-lg font-semibold transition-colors ${isListening
+                      ? 'bg-red-500 text-white hover:bg-red-600 animate-pulse'
                       : 'bg-accent/10 text-accent hover:bg-accent/20'
                       }`}
-                    title="Auto-read answers aloud"
+                    title={isListening ? "Stop listening" : "Voice input"}
                   >
                     <svg
-                      className="w-4 h-4"
+                      className="w-5 h-5"
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"
@@ -832,82 +887,20 @@ export default function Dashboard() {
                         strokeLinecap="round"
                         strokeLinejoin="round"
                         strokeWidth={2}
-                        d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"
+                        d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"
                       />
                     </svg>
-                    Hands-Free
                   </button>
-                  {currentSessionId && (
-                    <button
-                      onClick={handleNewChat}
-                      className="px-3 py-1 text-sm bg-accent/10 text-accent rounded-lg hover:bg-accent/20 transition-colors"
-                    >
-                      + New Chat
-                    </button>
-                  )}
-                </div>
-              </div>
-              <form onSubmit={handleQuery} className="flex gap-3">
-                <input
-                  type="text"
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Enter your study question..."
-                  className="flex-1 px-4 py-3 rounded-lg border border-ink/20 bg-background focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent text-ink placeholder:text-ink/40"
-                />
-                <button
-                  type="button"
-                  onClick={toggleVoiceInput}
-                  className={`px-4 py-3 rounded-lg font-semibold transition-colors ${isListening
-                    ? 'bg-red-500 text-white hover:bg-red-600 animate-pulse'
-                    : 'bg-accent/10 text-accent hover:bg-accent/20'
-                    }`}
-                  title={isListening ? "Stop listening" : "Voice input"}
-                >
-                  <svg
-                    className="w-5 h-5"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
+                  <button
+                    type="submit"
+                    disabled={isQuerying || !query.trim()}
+                    className="px-6 py-3 bg-accent text-white font-semibold rounded-lg hover:bg-accent/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"
-                    />
-                  </svg>
-                </button>
-                <button
-                  type="submit"
-                  disabled={isQuerying || !query.trim()}
-                  className="px-6 py-3 bg-accent text-white font-semibold rounded-lg hover:bg-accent/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  {isQuerying ? "Querying..." : "Ask"}
-                </button>
-              </form>
-
-              {/* Document Selection Section */}
-              <div className="mt-6">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-sm font-semibold text-ink">
-                    📎 Select Documents for Context
-                  </h3>
-                  {selectedDocumentIds.length === 0 && (
-                    <span className="text-xs text-ink/50">
-                      (All documents will be used if none selected)
-                    </span>
-                  )}
-                </div>
-                <div className="bg-background rounded-lg p-4 max-h-80 overflow-y-auto">
-                  <DocumentList
-                    selectionMode={true}
-                    selectedDocumentIds={selectedDocumentIds}
-                    onSelectionChange={setSelectedDocumentIds}
-                  />
-                </div>
-              </div>
-            </section>
+                    {isQuerying ? "Querying..." : "Ask"}
+                  </button>
+                </form>
+              </section>
+            </>
           )}
 
           {/* Flashcard Viewer - shown when in flashcard mode */}
