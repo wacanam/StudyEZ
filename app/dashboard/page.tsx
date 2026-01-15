@@ -10,6 +10,7 @@ import FlashcardViewer from "@/app/components/FlashcardViewer";
 import QuizViewer from "@/app/components/QuizViewer";
 import ChatHistory from "@/app/components/ChatHistory";
 import DocumentList from "@/app/components/DocumentList";
+import DocumentSelector from "@/app/components/DocumentSelector";
 import { ToastContainer, useToast } from "@/app/components/Toast";
 
 // TypeScript declarations for Web Speech API
@@ -152,6 +153,7 @@ export default function Dashboard() {
   const { messages: toastMessages, showToast, closeToast } = useToast();
   const [uploadMode, setUploadMode] = useState<UploadMode>("files");
   const [linkUrl, setLinkUrl] = useState("");
+  const [selectedDocumentIds, setSelectedDocumentIds] = useState<number[]>([]);
 
   const addLog = (message: string) => {
     const timestamp = new Date().toLocaleTimeString();
@@ -422,7 +424,12 @@ export default function Dashboard() {
 
     setIsQuerying(true);
     setResponse(null);
-    addLog(`Querying: "${query}"`);
+    
+    // Log selection context
+    const contextMsg = selectedDocumentIds.length > 0 
+      ? ` (filtering ${selectedDocumentIds.length} document chunks)` 
+      : " (searching all documents)";
+    addLog(`Querying: "${query}"${contextMsg}`);
 
     try {
       const res = await fetch("/api/query", {
@@ -433,6 +440,7 @@ export default function Dashboard() {
         body: JSON.stringify({
           query,
           sessionId: currentSessionId,
+          documentIds: selectedDocumentIds.length > 0 ? selectedDocumentIds : undefined,
         }),
       });
 
@@ -804,47 +812,55 @@ export default function Dashboard() {
 
           {/* Query Section - shown when in Q&A mode */}
           {studyMode === "query" && (
-            <section className="bg-surface rounded-xl p-6 mb-8 shadow-sm">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-semibold text-ink">
-                  🔍 Ask a Question
-                </h2>
-                <div className="flex items-center gap-3">
-                  {/* Hands-Free Mode Toggle */}
-                  <button
-                    onClick={toggleHandsFreeMode}
-                    className={`flex items-center gap-2 px-3 py-1 text-sm rounded-lg transition-colors ${isHandsFreeModeEnabled
-                        ? 'bg-accent text-white'
-                        : 'bg-accent/10 text-accent hover:bg-accent/20'
-                      }`}
-                    title="Auto-read answers aloud"
-                  >
-                    <svg
-                      className="w-4 h-4"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"
-                      />
-                    </svg>
-                    Hands-Free
-                  </button>
-                  {currentSessionId && (
+            <>
+              {/* Document Context Selector */}
+              <DocumentSelector
+                selectedDocumentIds={selectedDocumentIds}
+                onSelectionChange={setSelectedDocumentIds}
+                className="mb-4"
+              />
+              
+              <section className="bg-surface rounded-xl p-6 mb-8 shadow-sm">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-xl font-semibold text-ink">
+                    🔍 Ask a Question
+                  </h2>
+                  <div className="flex items-center gap-3">
+                    {/* Hands-Free Mode Toggle */}
                     <button
-                      onClick={handleNewChat}
-                      className="px-3 py-1 text-sm bg-accent/10 text-accent rounded-lg hover:bg-accent/20 transition-colors"
+                      onClick={toggleHandsFreeMode}
+                      className={`flex items-center gap-2 px-3 py-1 text-sm rounded-lg transition-colors ${isHandsFreeModeEnabled
+                          ? 'bg-accent text-white'
+                          : 'bg-accent/10 text-accent hover:bg-accent/20'
+                        }`}
+                      title="Auto-read answers aloud"
                     >
-                      + New Chat
+                      <svg
+                        className="w-4 h-4"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"
+                        />
+                      </svg>
+                      Hands-Free
                     </button>
-                  )}
+                    {currentSessionId && (
+                      <button
+                        onClick={handleNewChat}
+                        className="px-3 py-1 text-sm bg-accent/10 text-accent rounded-lg hover:bg-accent/20 transition-colors"
+                      >
+                        + New Chat
+                      </button>
+                    )}
+                  </div>
                 </div>
-              </div>
-              <form onSubmit={handleQuery} className="flex gap-3">
+                <form onSubmit={handleQuery} className="flex gap-3">
                 <input
                   type="text"
                   value={query}
@@ -884,6 +900,7 @@ export default function Dashboard() {
                 </button>
               </form>
             </section>
+            </>
           )}
 
           {/* Flashcard Viewer - shown when in flashcard mode */}

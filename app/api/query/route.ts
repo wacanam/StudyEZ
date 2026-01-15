@@ -16,10 +16,25 @@ export async function POST(request: NextRequest) {
     const { userId } = authResult;
 
     const body = await request.json();
-    const { query, sessionId } = body;
+    const { query, sessionId, documentIds } = body;
 
     if (!query || typeof query !== "string") {
       return ErrorHandler.badRequest("Query is required");
+    }
+
+    // Validate documentIds if provided
+    let filteredDocumentIds: number[] | undefined;
+    if (documentIds !== undefined) {
+      if (!Array.isArray(documentIds)) {
+        return ErrorHandler.badRequest("documentIds must be an array");
+      }
+      if (documentIds.length > 0) {
+        // Validate all IDs are numbers
+        if (!documentIds.every((id) => typeof id === "number")) {
+          return ErrorHandler.badRequest("All documentIds must be numbers");
+        }
+        filteredDocumentIds = documentIds;
+      }
     }
 
     // Initialize database if needed
@@ -29,7 +44,14 @@ export async function POST(request: NextRequest) {
     const queryEmbedding = await generateEmbedding(query);
 
     // Hybrid search: retrieve top 10 candidates using vector + FTS
-    const candidateDocs = await hybridSearch(query, queryEmbedding, userId, 10);
+    // Pass documentIds for filtering if provided
+    const candidateDocs = await hybridSearch(
+      query,
+      queryEmbedding,
+      userId,
+      10,
+      filteredDocumentIds
+    );
 
     if (candidateDocs.length === 0) {
       return ApiResponseBuilder.success({
