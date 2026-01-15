@@ -248,7 +248,8 @@ export async function hybridSearchFiltered(
   }
 
   // Perform filtered hybrid search using RRF
-  // Use Prisma.sql to properly parameterize the array
+  // Note: ${documentIds}::integer[] properly parameterizes the array via Prisma
+  // This prevents SQL injection while allowing PostgreSQL's ANY operator
   const results = await db.$queryRaw<
     Array<{ id: number; content: string; score: number; metadata: Record<string, unknown> }>
   >`

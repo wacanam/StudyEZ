@@ -90,8 +90,11 @@ export function isQueryRequest(obj: unknown): obj is QueryRequest {
     if (!Array.isArray(request.documentIds)) {
       return false;
     }
-    if (!request.documentIds.every(id => typeof id === 'number')) {
-      return false;
+    // Check each element is a number - early exit on first non-number
+    for (const id of request.documentIds) {
+      if (typeof id !== 'number') {
+        return false;
+      }
     }
   }
   
