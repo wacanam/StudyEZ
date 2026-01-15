@@ -134,29 +134,39 @@ export async function searchSimilarDocuments(
 /**
  * Hybrid search combining vector similarity and full-text search
  * Uses Reciprocal Rank Fusion (RRF) to combine rankings from both methods
+ * @param selectedFileNames - Optional array of file names to filter by
  */
 export async function hybridSearch(
   query: string,
   embedding: number[],
   userId: string,
-  limit: number = 10
+  limit: number = 10,
+  selectedFileNames?: string[]
 ): Promise<Array<{ id: number; content: string; score: number; metadata: Record<string, unknown> }>> {
   const db = getPrisma();
   const vectorString = toVectorString(embedding);
 
+  // Build the file filter condition
+  let fileFilterCondition = '';
+  if (selectedFileNames && selectedFileNames.length > 0) {
+    // Create a filter that checks if metadata->>'fileName' is in the selected list
+    const fileNamesJson = JSON.stringify(selectedFileNames);
+    fileFilterCondition = `AND (metadata->>'fileName')::text = ANY(ARRAY[${selectedFileNames.map(name => `'${name.replace(/'/g, "''")}'`).join(',')}]::text[])`;
+  }
+
   // Perform hybrid search using RRF (Reciprocal Rank Fusion)
   // k=60 is a common constant for RRF
-  const results = await db.$queryRaw<
+  const results = await db.$queryRawUnsafe<
     Array<{ id: number; content: string; score: number; metadata: Record<string, unknown> }>
-  >`
+  >(`
     WITH vector_search AS (
       SELECT 
         id, 
         content, 
         metadata,
-        ROW_NUMBER() OVER (ORDER BY embedding <=> ${vectorString}::vector) AS rank
+        ROW_NUMBER() OVER (ORDER BY embedding <=> '${vectorString}'::vector) AS rank
       FROM documents
-      WHERE embedding IS NOT NULL AND user_id = ${userId}
+      WHERE embedding IS NOT NULL AND user_id = '${userId}' ${fileFilterCondition}
       LIMIT 20
     ),
     fts_search AS (
@@ -164,9 +174,9 @@ export async function hybridSearch(
         id, 
         content, 
         metadata,
-        ROW_NUMBER() OVER (ORDER BY ts_rank(to_tsvector('english', content), plainto_tsquery('english', ${query})) DESC) AS rank
+        ROW_NUMBER() OVER (ORDER BY ts_rank(to_tsvector('english', content), plainto_tsquery('english', '${query.replace(/'/g, "''")}')) DESC) AS rank
       FROM documents
-      WHERE user_id = ${userId} AND to_tsvector('english', content) @@ plainto_tsquery('english', ${query})
+      WHERE user_id = '${userId}' AND to_tsvector('english', content) @@ plainto_tsquery('english', '${query.replace(/'/g, "''")}') ${fileFilterCondition}
       LIMIT 20
     ),
     combined AS (
@@ -182,7 +192,7 @@ export async function hybridSearch(
     FROM combined
     ORDER BY score DESC
     LIMIT ${limit}
-  `;
+  `);
 
   return results;
 }

@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
     const { userId } = authResult;
 
     const body = await request.json();
-    const { query, sessionId } = body;
+    const { query, sessionId, selectedDocuments } = body;
 
     if (!query || typeof query !== "string") {
       return ErrorHandler.badRequest("Query is required");
@@ -29,7 +29,14 @@ export async function POST(request: NextRequest) {
     const queryEmbedding = await generateEmbedding(query);
 
     // Hybrid search: retrieve top 10 candidates using vector + FTS
-    const candidateDocs = await hybridSearch(query, queryEmbedding, userId, 10);
+    // If selectedDocuments is provided and not empty, filter by those file names
+    const candidateDocs = await hybridSearch(
+      query, 
+      queryEmbedding, 
+      userId, 
+      10,
+      selectedDocuments && selectedDocuments.length > 0 ? selectedDocuments : undefined
+    );
 
     if (candidateDocs.length === 0) {
       return ApiResponseBuilder.success({

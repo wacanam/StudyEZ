@@ -10,6 +10,7 @@ import FlashcardViewer from "@/app/components/FlashcardViewer";
 import QuizViewer from "@/app/components/QuizViewer";
 import ChatHistory from "@/app/components/ChatHistory";
 import DocumentList from "@/app/components/DocumentList";
+import DocumentSelector from "@/app/components/DocumentSelector";
 import { ToastContainer, useToast } from "@/app/components/Toast";
 
 // TypeScript declarations for Web Speech API
@@ -152,6 +153,7 @@ export default function Dashboard() {
   const { messages: toastMessages, showToast, closeToast } = useToast();
   const [uploadMode, setUploadMode] = useState<UploadMode>("files");
   const [linkUrl, setLinkUrl] = useState("");
+  const [selectedDocuments, setSelectedDocuments] = useState<string[]>([]);
 
   const addLog = (message: string) => {
     const timestamp = new Date().toLocaleTimeString();
@@ -422,7 +424,10 @@ export default function Dashboard() {
 
     setIsQuerying(true);
     setResponse(null);
-    addLog(`Querying: "${query}"`);
+    const contextInfo = selectedDocuments.length > 0 
+      ? `(${selectedDocuments.length} selected documents)` 
+      : "(all documents)";
+    addLog(`Querying: "${query}" ${contextInfo}`);
 
     try {
       const res = await fetch("/api/query", {
@@ -433,6 +438,7 @@ export default function Dashboard() {
         body: JSON.stringify({
           query,
           sessionId: currentSessionId,
+          selectedDocuments: selectedDocuments.length > 0 ? selectedDocuments : undefined,
         }),
       });
 
@@ -844,6 +850,15 @@ export default function Dashboard() {
                   )}
                 </div>
               </div>
+
+              {/* Document Selector */}
+              <div className="mb-4">
+                <DocumentSelector
+                  selectedFileNames={selectedDocuments}
+                  onSelectionChange={setSelectedDocuments}
+                />
+              </div>
+
               <form onSubmit={handleQuery} className="flex gap-3">
                 <input
                   type="text"
