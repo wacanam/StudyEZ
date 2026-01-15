@@ -161,9 +161,8 @@ export default function DocumentSelector({
               aria-controls="document-selector-content"
             >
               <svg
-                className={`w-5 h-5 transition-transform ${
-                  isExpanded ? "rotate-90" : ""
-                }`}
+                className={`w-5 h-5 transition-transform ${isExpanded ? "rotate-90" : ""
+                  }`}
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -253,11 +252,10 @@ export default function DocumentSelector({
                 return (
                   <label
                     key={file.fileName}
-                    className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
-                      isSelected
+                    className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-all ${isSelected
                         ? "bg-accent/10 border-accent/30 hover:bg-accent/15"
                         : "bg-background border-ink/10 hover:border-accent/20 hover:bg-accent/5"
-                    }`}
+                      }`}
                   >
                     <input
                       type="checkbox"
@@ -296,9 +294,8 @@ export default function DocumentSelector({
             <p className="text-xs text-ink/60">
               {selectedFilesCount === 0
                 ? "💡 No selection means all documents will be searched"
-                : `💡 Only ${selectedFilesCount} selected document${
-                    selectedFilesCount === 1 ? "" : "s"
-                  } will be searched`}
+                : `💡 Only ${selectedFilesCount} selected document${selectedFilesCount === 1 ? "" : "s"
+                } will be searched`}
             </p>
           </div>
         </div>

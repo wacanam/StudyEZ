@@ -132,6 +132,29 @@ export async function searchSimilarDocuments(
 }
 
 /**
+ * Validate that document IDs belong to the specified user
+ * Returns array of valid document IDs that exist and belong to the user
+ */
+export async function validateDocumentOwnership(
+  documentIds: number[],
+  userId: string
+): Promise<number[]> {
+  const db = getPrisma();
+
+  const validDocuments = await db.document.findMany({
+    where: {
+      id: { in: documentIds },
+      userId: userId,
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  return validDocuments.map((doc) => doc.id);
+}
+
+/**
  * Hybrid search combining vector similarity and full-text search
  * Uses Reciprocal Rank Fusion (RRF) to combine rankings from both methods
  * @param documentIds - Optional array of document IDs to filter the search
@@ -148,7 +171,7 @@ export async function hybridSearch(
 
   // If documentIds are provided, add them to the WHERE clause
   const documentFilter = documentIds && documentIds.length > 0;
-  
+
   if (documentFilter) {
     // Hybrid search with document ID filtering
     const results = await db.$queryRaw<

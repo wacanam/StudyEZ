@@ -424,10 +424,10 @@ export default function Dashboard() {
 
     setIsQuerying(true);
     setResponse(null);
-    
+
     // Log selection context
-    const contextMsg = selectedDocumentIds.length > 0 
-      ? ` (filtering ${selectedDocumentIds.length} document chunks)` 
+    const contextMsg = selectedDocumentIds.length > 0
+      ? ` (filtering ${selectedDocumentIds.length} document chunks)`
       : " (searching all documents)";
     addLog(`Querying: "${query}"${contextMsg}`);
 
@@ -636,8 +636,8 @@ export default function Dashboard() {
               <button
                 onClick={() => setUploadMode("files")}
                 className={`px-4 py-2 font-medium transition-colors ${uploadMode === "files"
-                    ? "text-accent border-b-2 border-accent"
-                    : "text-ink/60 hover:text-ink"
+                  ? "text-accent border-b-2 border-accent"
+                  : "text-ink/60 hover:text-ink"
                   }`}
               >
                 📄 Files
@@ -645,8 +645,8 @@ export default function Dashboard() {
               <button
                 onClick={() => setUploadMode("link")}
                 className={`px-4 py-2 font-medium transition-colors ${uploadMode === "link"
-                    ? "text-accent border-b-2 border-accent"
-                    : "text-ink/60 hover:text-ink"
+                  ? "text-accent border-b-2 border-accent"
+                  : "text-ink/60 hover:text-ink"
                   }`}
               >
                 🔗 Link
@@ -711,10 +711,10 @@ export default function Dashboard() {
               {uploadStatus.status !== "idle" && (
                 <div
                   className={`p-3 rounded-lg text-sm ${uploadStatus.status === "success"
-                      ? "bg-green-100 text-green-800"
-                      : uploadStatus.status === "error"
-                        ? "bg-red-100 text-red-800"
-                        : "bg-accent/10 text-accent"
+                    ? "bg-green-100 text-green-800"
+                    : uploadStatus.status === "error"
+                      ? "bg-red-100 text-red-800"
+                      : "bg-accent/10 text-accent"
                     }`}
                 >
                   {uploadStatus.status === "uploading" && "⏳ "}
@@ -741,8 +741,8 @@ export default function Dashboard() {
               <button
                 onClick={() => setStudyMode("query")}
                 className={`flex-1 px-4 py-3 rounded-lg font-medium transition-colors ${studyMode === "query"
-                    ? "bg-accent text-white"
-                    : "bg-background text-ink border border-ink/20 hover:border-accent/50"
+                  ? "bg-accent text-white"
+                  : "bg-background text-ink border border-ink/20 hover:border-accent/50"
                   }`}
               >
                 🔍 Q&A Mode
@@ -750,8 +750,8 @@ export default function Dashboard() {
               <button
                 onClick={() => setStudyMode("flashcards")}
                 className={`flex-1 px-4 py-3 rounded-lg font-medium transition-colors ${studyMode === "flashcards"
-                    ? "bg-accent text-white"
-                    : "bg-background text-ink border border-ink/20 hover:border-accent/50"
+                  ? "bg-accent text-white"
+                  : "bg-background text-ink border border-ink/20 hover:border-accent/50"
                   }`}
               >
                 🗂️ Flashcards
@@ -759,8 +759,8 @@ export default function Dashboard() {
               <button
                 onClick={() => setStudyMode("quiz")}
                 className={`flex-1 px-4 py-3 rounded-lg font-medium transition-colors ${studyMode === "quiz"
-                    ? "bg-accent text-white"
-                    : "bg-background text-ink border border-ink/20 hover:border-accent/50"
+                  ? "bg-accent text-white"
+                  : "bg-background text-ink border border-ink/20 hover:border-accent/50"
                   }`}
               >
                 📝 Quiz Mode
@@ -768,8 +768,8 @@ export default function Dashboard() {
               <button
                 onClick={() => setStudyMode("documents")}
                 className={`flex-1 px-4 py-3 rounded-lg font-medium transition-colors ${studyMode === "documents"
-                    ? "bg-accent text-white"
-                    : "bg-background text-ink border border-ink/20 hover:border-accent/50"
+                  ? "bg-accent text-white"
+                  : "bg-background text-ink border border-ink/20 hover:border-accent/50"
                   }`}
               >
                 📚 Documents
@@ -799,8 +799,8 @@ export default function Dashboard() {
                 {generationStatus && (
                   <div
                     className={`p-3 rounded-lg text-sm ${generationStatus.includes("Error")
-                        ? "bg-red-100 text-red-800"
-                        : "bg-green-100 text-green-800"
+                      ? "bg-red-100 text-red-800"
+                      : "bg-green-100 text-green-800"
                       }`}
                   >
                     {generationStatus}
@@ -819,7 +819,7 @@ export default function Dashboard() {
                 onSelectionChange={setSelectedDocumentIds}
                 className="mb-4"
               />
-              
+
               <section className="bg-surface rounded-xl p-6 mb-8 shadow-sm">
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="text-xl font-semibold text-ink">
@@ -830,8 +830,8 @@ export default function Dashboard() {
                     <button
                       onClick={toggleHandsFreeMode}
                       className={`flex items-center gap-2 px-3 py-1 text-sm rounded-lg transition-colors ${isHandsFreeModeEnabled
-                          ? 'bg-accent text-white'
-                          : 'bg-accent/10 text-accent hover:bg-accent/20'
+                        ? 'bg-accent text-white'
+                        : 'bg-accent/10 text-accent hover:bg-accent/20'
                         }`}
                       title="Auto-read answers aloud"
                     >
@@ -861,45 +861,66 @@ export default function Dashboard() {
                   </div>
                 </div>
                 <form onSubmit={handleQuery} className="flex gap-3">
-                <input
-                  type="text"
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Enter your study question..."
-                  className="flex-1 px-4 py-3 rounded-lg border border-ink/20 bg-background focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent text-ink placeholder:text-ink/40"
-                />
-                <button
-                  type="button"
-                  onClick={toggleVoiceInput}
-                  className={`px-4 py-3 rounded-lg font-semibold transition-colors ${isListening
+                  <input
+                    type="text"
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    placeholder="Enter your study question..."
+                    className="flex-1 px-4 py-3 rounded-lg border border-ink/20 bg-background focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent text-ink placeholder:text-ink/40"
+                  />
+                  <button
+                    type="button"
+                    onClick={toggleVoiceInput}
+                    className={`px-4 py-3 rounded-lg font-semibold transition-colors ${isListening
                       ? 'bg-red-500 text-white hover:bg-red-600 animate-pulse'
                       : 'bg-accent/10 text-accent hover:bg-accent/20'
-                    }`}
-                  title={isListening ? "Stop listening" : "Voice input"}
-                >
-                  <svg
-                    className="w-5 h-5"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
+                      }`}
+                    title={isListening ? "Stop listening" : "Voice input"}
                   >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"
+                    <svg
+                      className="w-5 h-5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"
+                      />
+                    </svg>
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isQuerying || !query.trim()}
+                    className="px-6 py-3 bg-accent text-white font-semibold rounded-lg hover:bg-accent/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {isQuerying ? "Querying..." : "Ask"}
+                  </button>
+                </form>
+
+                {/* Document Selection Section */}
+                <div className="mt-6">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-sm font-semibold text-ink">
+                      📎 Select Documents for Context
+                    </h3>
+                    {selectedDocumentIds.length === 0 && (
+                      <span className="text-xs text-ink/50">
+                        (All documents will be used if none selected)
+                      </span>
+                    )}
+                  </div>
+                  <div className="bg-background rounded-lg p-4 max-h-80 overflow-y-auto">
+                    <DocumentList
+                      selectionMode={true}
+                      selectedDocumentIds={selectedDocumentIds}
+                      onSelectionChange={setSelectedDocumentIds}
                     />
-                  </svg>
-                </button>
-                <button
-                  type="submit"
-                  disabled={isQuerying || !query.trim()}
-                  className="px-6 py-3 bg-accent text-white font-semibold rounded-lg hover:bg-accent/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  {isQuerying ? "Querying..." : "Ask"}
-                </button>
-              </form>
-            </section>
+                  </div>
+                </div>
+              </section>
             </>
           )}
 
@@ -945,8 +966,8 @@ export default function Dashboard() {
                       <div
                         key={index}
                         className={`p-4 rounded-lg ${message.role === "user"
-                            ? "bg-accent/10 border-l-4 border-accent"
-                            : "bg-background border-l-4 border-ink/20"
+                          ? "bg-accent/10 border-l-4 border-accent"
+                          : "bg-background border-l-4 border-ink/20"
                           }`}
                       >
                         <div className="flex items-center justify-between mb-2">
@@ -962,8 +983,8 @@ export default function Dashboard() {
                             <button
                               onClick={() => readAloud(message.content, message.id)}
                               className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-medium transition-colors ${isSpeaking && speakingMessageId === message.id
-                                  ? 'bg-red-500 text-white hover:bg-red-600'
-                                  : 'bg-accent/10 text-accent hover:bg-accent/20'
+                                ? 'bg-red-500 text-white hover:bg-red-600'
+                                : 'bg-accent/10 text-accent hover:bg-accent/20'
                                 }`}
                               title={isSpeaking && speakingMessageId === message.id ? "Stop reading" : "Read aloud"}
                             >
@@ -1023,8 +1044,8 @@ export default function Dashboard() {
                     <button
                       onClick={() => readAloud(response.answer)}
                       className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${isSpeaking
-                          ? 'bg-red-500 text-white hover:bg-red-600'
-                          : 'bg-accent text-white hover:bg-accent/90'
+                        ? 'bg-red-500 text-white hover:bg-red-600'
+                        : 'bg-accent text-white hover:bg-accent/90'
                         }`}
                     >
                       {isSpeaking ? (
@@ -1073,8 +1094,8 @@ export default function Dashboard() {
                       <div className="flex items-center gap-2">
                         <span className="text-sm text-ink/60">Confidence:</span>
                         <div className={`px-3 py-1 rounded-full font-semibold text-sm ${response.confidenceScore >= 80 ? 'bg-green-100 text-green-800' :
-                            response.confidenceScore >= 60 ? 'bg-yellow-100 text-yellow-800' :
-                              'bg-red-100 text-red-800'
+                          response.confidenceScore >= 60 ? 'bg-yellow-100 text-yellow-800' :
+                            'bg-red-100 text-red-800'
                           }`}>
                           {response.confidenceScore}%
                         </div>
