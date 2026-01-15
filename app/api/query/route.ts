@@ -3,7 +3,7 @@ import { requireAuth, isAuthSuccess } from "@/lib/middleware/auth-middleware";
 import { ErrorHandler } from "@/lib/utils/error-handler";
 import { ApiResponseBuilder } from "@/lib/utils/api-response";
 import { sourcesToJson, SourceDocument } from "@/lib/types/api-types";
-import { hybridSearch, initializeDatabase, getPrisma } from "@/lib/db";
+import { hybridSearch, initializeDatabase, getPrisma, validateDocumentOwnership } from "@/lib/db";
 import { generateEmbedding, generateResponse, rerankDocuments } from "@/lib/rag";
 
 export async function POST(request: NextRequest) {
@@ -23,38 +23,36 @@ export async function POST(request: NextRequest) {
     }
 
     // Validate selectedDocumentIds if provided
-    let documentIds: number[] | undefined;
+    let validatedDocumentIds: number[] | undefined;
     if (selectedDocumentIds !== undefined) {
+      // Ensure it's an array
       if (!Array.isArray(selectedDocumentIds)) {
         return ErrorHandler.badRequest("selectedDocumentIds must be an array");
       }
-      // Validate all elements are numbers
-      if (!selectedDocumentIds.every((id: unknown) => typeof id === "number" && Number.isInteger(id))) {
-        return ErrorHandler.badRequest("All document IDs must be integers");
+
+      // Ensure all elements are numbers
+      const allNumbers = selectedDocumentIds.every((id) => typeof id === "number" && Number.isInteger(id));
+      if (!allNumbers) {
+        return ErrorHandler.badRequest("All selectedDocumentIds must be integers");
       }
-      // Only proceed with filtering if we have IDs, empty array means no results
+
+      // Validate ownership - ensure all provided IDs belong to the user
       if (selectedDocumentIds.length > 0) {
-        // Verify that all selected documents belong to the authenticated user
-        const db = getPrisma();
-        const userDocuments = await db.document.findMany({
-          where: {
-            id: { in: selectedDocumentIds },
-            userId: userId,
-          },
-          select: { id: true },
-        });
-        
-        // If any document IDs don't belong to the user, reject the request
-        if (userDocuments.length !== selectedDocumentIds.length) {
-          return ErrorHandler.badRequest(
-            "Invalid document IDs: some documents do not exist or do not belong to you"
+        validatedDocumentIds = await validateDocumentOwnership(selectedDocumentIds, userId);
+
+        // If no valid documents found, return error
+        if (validatedDocumentIds.length === 0) {
+          return ErrorHandler.badRequest("No valid documents found for the provided IDs");
+        }
+
+        // If some IDs were invalid, we still proceed with valid ones
+        // but could optionally warn the user
+        if (validatedDocumentIds.length < selectedDocumentIds.length) {
+          console.warn(
+            `Some document IDs were invalid or don't belong to user ${userId}. ` +
+            `Requested: ${selectedDocumentIds.length}, Valid: ${validatedDocumentIds.length}`
           );
         }
-        
-        documentIds = selectedDocumentIds;
-      } else {
-        // Empty array means search nothing (no results)
-        documentIds = [];
       }
     }
 
@@ -65,8 +63,14 @@ export async function POST(request: NextRequest) {
     const queryEmbedding = await generateEmbedding(query);
 
     // Hybrid search: retrieve top 10 candidates using vector + FTS
-    // If documentIds is provided, only search within those documents
-    const candidateDocs = await hybridSearch(query, queryEmbedding, userId, 10, documentIds);
+    // If validatedDocumentIds is provided, restrict search to those documents
+    const candidateDocs = await hybridSearch(
+      query,
+      queryEmbedding,
+      userId,
+      10,
+      validatedDocumentIds
+    );
 
     if (candidateDocs.length === 0) {
       return ApiResponseBuilder.success({
@@ -78,7 +82,7 @@ export async function POST(request: NextRequest) {
 
     // Re-rank: use Gemini to select top 3 most relevant documents
     const reranked = await rerankDocuments(
-      query, 
+      query,
       candidateDocs.map(doc => ({ content: doc.content, score: doc.score })),
       3
     );
@@ -104,8 +108,8 @@ export async function POST(request: NextRequest) {
     const answer = await generateResponse(query, context);
 
     // Calculate confidence score based on re-ranking scores (average of top 3)
-    const avgRelevance = topDocs.length > 0 
-      ? topDocs.reduce((sum, doc) => sum + doc.relevanceScore, 0) / topDocs.length 
+    const avgRelevance = topDocs.length > 0
+      ? topDocs.reduce((sum, doc) => sum + doc.relevanceScore, 0) / topDocs.length
       : 0;
     const confidenceScore = Math.round(avgRelevance);
 

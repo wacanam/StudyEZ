@@ -132,42 +132,50 @@ export async function searchSimilarDocuments(
 }
 
 /**
+ * Validate that document IDs belong to the specified user
+ * Returns array of valid document IDs that exist and belong to the user
+ */
+export async function validateDocumentOwnership(
+  documentIds: number[],
+  userId: string
+): Promise<number[]> {
+  const db = getPrisma();
+
+  const validDocuments = await db.document.findMany({
+    where: {
+      id: { in: documentIds },
+      userId: userId,
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  return validDocuments.map((doc) => doc.id);
+}
+
+/**
  * Hybrid search combining vector similarity and full-text search
  * Uses Reciprocal Rank Fusion (RRF) to combine rankings from both methods
- * 
- * @param query - The search query string
- * @param embedding - The query embedding vector
- * @param userId - User ID to filter documents
- * @param limit - Maximum number of results to return
- * @param documentIds - Optional array of document IDs to restrict search.
- *   - If undefined: searches all user's documents (default behavior)
- *   - If empty array: returns empty results (no documents to search)
- *   - If non-empty array: only searches within the specified document IDs
- *   - All IDs must be valid integers belonging to the user (validated by caller)
+ * @param selectedDocumentIds Optional array of document IDs to filter search results
  */
 export async function hybridSearch(
   query: string,
   embedding: number[],
   userId: string,
   limit: number = 10,
-  documentIds?: number[]
+  selectedDocumentIds?: number[]
 ): Promise<Array<{ id: number; content: string; score: number; metadata: Record<string, unknown> }>> {
   const db = getPrisma();
   const vectorString = toVectorString(embedding);
 
   // Build document ID filter condition
-  // If documentIds is provided and not empty, filter by those IDs
-  const hasDocumentFilter = documentIds && documentIds.length > 0;
+  const hasDocumentFilter = selectedDocumentIds && selectedDocumentIds.length > 0;
 
+  // Perform hybrid search using RRF (Reciprocal Rank Fusion)
+  // k=60 is a common constant for RRF
   if (hasDocumentFilter) {
-    // Safety check: ensure all IDs are integers (should be validated by caller)
-    // This protects against SQL injection via array casting
-    if (!documentIds.every(id => Number.isInteger(id))) {
-      throw new Error("All document IDs must be integers");
-    }
-
-    // Perform hybrid search with document ID filtering
-    // k=60 is a common constant for RRF
+    // With document ID filtering
     const results = await db.$queryRaw<
       Array<{ id: number; content: string; score: number; metadata: Record<string, unknown> }>
     >`
@@ -178,7 +186,7 @@ export async function hybridSearch(
           metadata,
           ROW_NUMBER() OVER (ORDER BY embedding <=> ${vectorString}::vector) AS rank
         FROM documents
-        WHERE embedding IS NOT NULL AND user_id = ${userId} AND id = ANY(${documentIds}::int[])
+        WHERE embedding IS NOT NULL AND user_id = ${userId} AND id = ANY(${selectedDocumentIds}::int[])
         LIMIT 20
       ),
       fts_search AS (
@@ -188,7 +196,47 @@ export async function hybridSearch(
           metadata,
           ROW_NUMBER() OVER (ORDER BY ts_rank(to_tsvector('english', content), plainto_tsquery('english', ${query})) DESC) AS rank
         FROM documents
-        WHERE user_id = ${userId} AND to_tsvector('english', content) @@ plainto_tsquery('english', ${query}) AND id = ANY(${documentIds}::int[])
+        WHERE user_id = ${userId} AND id = ANY(${selectedDocumentIds}::int[]) AND to_tsvector('english', content) @@ plainto_tsquery('english', ${query})
+        LIMIT 20
+      ),
+      combined AS (
+        SELECT 
+          COALESCE(v.id, f.id) AS id,
+          COALESCE(v.content, f.content) AS content,
+          COALESCE(v.metadata, f.metadata) AS metadata,
+          (COALESCE(1.0 / (60 + v.rank), 0.0) + COALESCE(1.0 / (60 + f.rank), 0.0)) AS score
+        FROM vector_search v
+        FULL OUTER JOIN fts_search f ON v.id = f.id
+      )
+      SELECT id, content, metadata, score
+      FROM combined
+      ORDER BY score DESC
+      LIMIT ${limit}
+    `;
+    return results;
+  } else {
+    // Without document ID filtering (original behavior)
+    const results = await db.$queryRaw<
+      Array<{ id: number; content: string; score: number; metadata: Record<string, unknown> }>
+    >`
+      WITH vector_search AS (
+        SELECT 
+          id, 
+          content, 
+          metadata,
+          ROW_NUMBER() OVER (ORDER BY embedding <=> ${vectorString}::vector) AS rank
+        FROM documents
+        WHERE embedding IS NOT NULL AND user_id = ${userId}
+        LIMIT 20
+      ),
+      fts_search AS (
+        SELECT 
+          id, 
+          content, 
+          metadata,
+          ROW_NUMBER() OVER (ORDER BY ts_rank(to_tsvector('english', content), plainto_tsquery('english', ${query})) DESC) AS rank
+        FROM documents
+        WHERE user_id = ${userId} AND to_tsvector('english', content) @@ plainto_tsquery('english', ${query})
         LIMIT 20
       ),
       combined AS (
@@ -207,45 +255,4 @@ export async function hybridSearch(
     `;
     return results;
   }
-
-  // Original query without document filtering (backward compatibility)
-  const results = await db.$queryRaw<
-    Array<{ id: number; content: string; score: number; metadata: Record<string, unknown> }>
-  >`
-    WITH vector_search AS (
-      SELECT 
-        id, 
-        content, 
-        metadata,
-        ROW_NUMBER() OVER (ORDER BY embedding <=> ${vectorString}::vector) AS rank
-      FROM documents
-      WHERE embedding IS NOT NULL AND user_id = ${userId}
-      LIMIT 20
-    ),
-    fts_search AS (
-      SELECT 
-        id, 
-        content, 
-        metadata,
-        ROW_NUMBER() OVER (ORDER BY ts_rank(to_tsvector('english', content), plainto_tsquery('english', ${query})) DESC) AS rank
-      FROM documents
-      WHERE user_id = ${userId} AND to_tsvector('english', content) @@ plainto_tsquery('english', ${query})
-      LIMIT 20
-    ),
-    combined AS (
-      SELECT 
-        COALESCE(v.id, f.id) AS id,
-        COALESCE(v.content, f.content) AS content,
-        COALESCE(v.metadata, f.metadata) AS metadata,
-        (COALESCE(1.0 / (60 + v.rank), 0.0) + COALESCE(1.0 / (60 + f.rank), 0.0)) AS score
-      FROM vector_search v
-      FULL OUTER JOIN fts_search f ON v.id = f.id
-    )
-    SELECT id, content, metadata, score
-    FROM combined
-    ORDER BY score DESC
-    LIMIT ${limit}
-  `;
-
-  return results;
 }
