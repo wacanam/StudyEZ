@@ -3,7 +3,7 @@ import { requireAuth, isAuthSuccess } from "@/lib/middleware/auth-middleware";
 import { ErrorHandler } from "@/lib/utils/error-handler";
 import { ApiResponseBuilder } from "@/lib/utils/api-response";
 import { sourcesToJson, SourceDocument } from "@/lib/types/api-types";
-import { hybridSearch, initializeDatabase, getPrisma } from "@/lib/db";
+import { hybridSearch, initializeDatabase, getPrisma, validateDocumentOwnership } from "@/lib/db";
 import { generateEmbedding, generateResponse, rerankDocuments } from "@/lib/rag";
 
 export async function POST(request: NextRequest) {
@@ -16,10 +16,44 @@ export async function POST(request: NextRequest) {
     const { userId } = authResult;
 
     const body = await request.json();
-    const { query, sessionId } = body;
+    const { query, sessionId, selectedDocumentIds } = body;
 
     if (!query || typeof query !== "string") {
       return ErrorHandler.badRequest("Query is required");
+    }
+
+    // Validate selectedDocumentIds if provided
+    let validatedDocumentIds: number[] | undefined;
+    if (selectedDocumentIds !== undefined) {
+      // Ensure it's an array
+      if (!Array.isArray(selectedDocumentIds)) {
+        return ErrorHandler.badRequest("selectedDocumentIds must be an array");
+      }
+
+      // Ensure all elements are numbers
+      const allNumbers = selectedDocumentIds.every((id) => typeof id === "number" && Number.isInteger(id));
+      if (!allNumbers) {
+        return ErrorHandler.badRequest("All selectedDocumentIds must be integers");
+      }
+
+      // Validate ownership - ensure all provided IDs belong to the user
+      if (selectedDocumentIds.length > 0) {
+        validatedDocumentIds = await validateDocumentOwnership(selectedDocumentIds, userId);
+        
+        // If no valid documents found, return error
+        if (validatedDocumentIds.length === 0) {
+          return ErrorHandler.badRequest("No valid documents found for the provided IDs");
+        }
+
+        // If some IDs were invalid, we still proceed with valid ones
+        // but could optionally warn the user
+        if (validatedDocumentIds.length < selectedDocumentIds.length) {
+          console.warn(
+            `Some document IDs were invalid or don't belong to user ${userId}. ` +
+            `Requested: ${selectedDocumentIds.length}, Valid: ${validatedDocumentIds.length}`
+          );
+        }
+      }
     }
 
     // Initialize database if needed
@@ -29,7 +63,14 @@ export async function POST(request: NextRequest) {
     const queryEmbedding = await generateEmbedding(query);
 
     // Hybrid search: retrieve top 10 candidates using vector + FTS
-    const candidateDocs = await hybridSearch(query, queryEmbedding, userId, 10);
+    // If validatedDocumentIds is provided, restrict search to those documents
+    const candidateDocs = await hybridSearch(
+      query, 
+      queryEmbedding, 
+      userId, 
+      10,
+      validatedDocumentIds
+    );
 
     if (candidateDocs.length === 0) {
       return ApiResponseBuilder.success({
