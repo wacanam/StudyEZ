@@ -247,11 +247,8 @@ export async function hybridSearchFiltered(
     return hybridSearch(query, embedding, userId, limit);
   }
 
-  // Build document ID filter for SQL
-  // Note: Prisma parameterized queries prevent SQL injection
-  const idList = documentIds.join(',');
-
   // Perform filtered hybrid search using RRF
+  // Use Prisma.sql to properly parameterize the array
   const results = await db.$queryRaw<
     Array<{ id: number; content: string; score: number; metadata: Record<string, unknown> }>
   >`
@@ -264,7 +261,7 @@ export async function hybridSearchFiltered(
       FROM documents
       WHERE embedding IS NOT NULL 
         AND user_id = ${userId}
-        AND id = ANY(ARRAY[${documentIds}]::integer[])
+        AND id = ANY(${documentIds}::integer[])
       LIMIT 20
     ),
     fts_search AS (
@@ -275,7 +272,7 @@ export async function hybridSearchFiltered(
         ROW_NUMBER() OVER (ORDER BY ts_rank(to_tsvector('english', content), plainto_tsquery('english', ${query})) DESC) AS rank
       FROM documents
       WHERE user_id = ${userId} 
-        AND id = ANY(ARRAY[${documentIds}]::integer[])
+        AND id = ANY(${documentIds}::integer[])
         AND to_tsvector('english', content) @@ plainto_tsquery('english', ${query})
       LIMIT 20
     ),
