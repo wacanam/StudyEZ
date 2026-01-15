@@ -16,12 +16,12 @@ export async function POST(request: NextRequest) {
     const { userId } = authResult;
 
     const body = await request.json();
-    
+
     // Validate request body structure
     if (!isQueryRequest(body)) {
       return ErrorHandler.badRequest("Invalid request format. Expected query (string), optional sessionId (number), and optional documentIds (number[])");
     }
-    
+
     const { query, sessionId, documentIds } = body;
 
     if (!query || typeof query !== "string") {
@@ -49,9 +49,9 @@ export async function POST(request: NextRequest) {
     // Hybrid search: retrieve top 10 candidates using vector + FTS
     // If documentIds provided, only search within those documents
     const candidateDocs = await hybridSearchFiltered(
-      query, 
-      queryEmbedding, 
-      userId, 
+      query,
+      queryEmbedding,
+      userId,
       10,
       validatedDocumentIds
     );
@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
       const message = validatedDocumentIds && validatedDocumentIds.length > 0
         ? "No relevant content found in the selected documents. Try selecting different documents or rephrasing your query."
         : "No relevant study materials found. Please upload some documents first.";
-      
+
       return ApiResponseBuilder.success({
         answer: message,
         sources: [],
@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
 
     // Re-rank: use Gemini to select top 3 most relevant documents
     const reranked = await rerankDocuments(
-      query, 
+      query,
       candidateDocs.map(doc => ({ content: doc.content, score: doc.score })),
       3
     );
@@ -96,8 +96,8 @@ export async function POST(request: NextRequest) {
     const answer = await generateResponse(query, context);
 
     // Calculate confidence score based on re-ranking scores (average of top 3)
-    const avgRelevance = topDocs.length > 0 
-      ? topDocs.reduce((sum, doc) => sum + doc.relevanceScore, 0) / topDocs.length 
+    const avgRelevance = topDocs.length > 0
+      ? topDocs.reduce((sum, doc) => sum + doc.relevanceScore, 0) / topDocs.length
       : 0;
     const confidenceScore = Math.round(avgRelevance);
 
