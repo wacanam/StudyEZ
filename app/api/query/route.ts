@@ -3,7 +3,7 @@ import { requireAuth, isAuthSuccess } from "@/lib/middleware/auth-middleware";
 import { ErrorHandler } from "@/lib/utils/error-handler";
 import { ApiResponseBuilder } from "@/lib/utils/api-response";
 import { sourcesToJson, SourceDocument } from "@/lib/types/api-types";
-import { hybridSearch, initializeDatabase, getPrisma } from "@/lib/db";
+import { hybridSearch, initializeDatabase, getPrisma, validateDocumentOwnership } from "@/lib/db";
 import { generateEmbedding, generateResponse, rerankDocuments } from "@/lib/rag";
 
 export async function POST(request: NextRequest) {
@@ -15,11 +15,25 @@ export async function POST(request: NextRequest) {
     }
     const { userId } = authResult;
 
-    const body = await request.json();
-    const { query, sessionId } = body;
+    const body = await request.json(); 
+
+    const { query, sessionId, documentIds } = body;
 
     if (!query || typeof query !== "string") {
       return ErrorHandler.badRequest("Query is required");
+    }
+
+    // Validate document ownership if documentIds provided
+    let validatedDocumentIds: number[] | undefined;
+    if (documentIds && documentIds.length > 0) {
+      try {
+        const ownershipResult = await validateDocumentOwnership(documentIds, userId);
+        validatedDocumentIds = ownershipResult.valid;
+      } catch (error) {
+        return ErrorHandler.badRequest(
+          error instanceof Error ? error.message : "Invalid document IDs"
+        );
+      }
     }
 
     // Initialize database if needed
@@ -29,11 +43,22 @@ export async function POST(request: NextRequest) {
     const queryEmbedding = await generateEmbedding(query);
 
     // Hybrid search: retrieve top 10 candidates using vector + FTS
-    const candidateDocs = await hybridSearch(query, queryEmbedding, userId, 10);
+    // If documentIds provided, only search within those documents
+    const candidateDocs = await hybridSearch(
+      query,
+      queryEmbedding,
+      userId,
+      10,
+      validatedDocumentIds
+    );
 
     if (candidateDocs.length === 0) {
+      const message = validatedDocumentIds && validatedDocumentIds.length > 0
+        ? "No relevant content found in the selected documents. Try selecting different documents or rephrasing your query."
+        : "No relevant study materials found. Please upload some documents first.";
+
       return ApiResponseBuilder.success({
-        answer: "No relevant study materials found. Please upload some documents first.",
+        answer: message,
         sources: [],
         confidenceScore: 0,
       });
@@ -41,8 +66,8 @@ export async function POST(request: NextRequest) {
 
     // Re-rank: use Gemini to select top 3 most relevant documents
     const reranked = await rerankDocuments(
-      query, 
-      candidateDocs.map(doc => ({ content: doc.content, score: doc.score })),
+      query,
+      candidateDocs.map((doc) => ({ content: doc.content, score: doc.score })),
       3
     );
 
@@ -67,8 +92,8 @@ export async function POST(request: NextRequest) {
     const answer = await generateResponse(query, context);
 
     // Calculate confidence score based on re-ranking scores (average of top 3)
-    const avgRelevance = topDocs.length > 0 
-      ? topDocs.reduce((sum, doc) => sum + doc.relevanceScore, 0) / topDocs.length 
+    const avgRelevance = topDocs.length > 0
+      ? topDocs.reduce((sum, doc) => sum + doc.relevanceScore, 0) / topDocs.length
       : 0;
     const confidenceScore = Math.round(avgRelevance);
 
