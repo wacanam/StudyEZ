@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { requireAuth, isAuthSuccess } from "@/lib/middleware/auth-middleware";
 import { ErrorHandler } from "@/lib/utils/error-handler";
 import { ApiResponseBuilder } from "@/lib/utils/api-response";
-import { sourcesToJson, SourceDocument, QueryRequest, isQueryRequest } from "@/lib/types/api-types";
+import { sourcesToJson, SourceDocument } from "@/lib/types/api-types";
 import { hybridSearch, initializeDatabase, getPrisma, validateDocumentOwnership } from "@/lib/db";
 import { generateEmbedding, generateResponse, rerankDocuments } from "@/lib/rag";
 
@@ -15,12 +15,7 @@ export async function POST(request: NextRequest) {
     }
     const { userId } = authResult;
 
-    const body = await request.json();
-
-    // Validate request body structure
-    // if (!isQueryRequest(body)) {
-    //   return ErrorHandler.badRequest("Invalid request format. Expected query (string), optional sessionId (number), and optional documentIds (number[])");
-    // }
+    const body = await request.json(); 
 
     const { query, sessionId, documentIds } = body;
 
@@ -32,7 +27,8 @@ export async function POST(request: NextRequest) {
     let validatedDocumentIds: number[] | undefined;
     if (documentIds && documentIds.length > 0) {
       try {
-        validatedDocumentIds = await validateDocumentOwnership(documentIds, userId);
+        const ownershipResult = await validateDocumentOwnership(documentIds, userId);
+        validatedDocumentIds = ownershipResult.valid;
       } catch (error) {
         return ErrorHandler.badRequest(
           error instanceof Error ? error.message : "Invalid document IDs"

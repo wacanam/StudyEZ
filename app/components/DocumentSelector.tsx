@@ -68,14 +68,18 @@ export default function DocumentSelector({
       );
       onSelectionChange(newSelection);
     } else {
-      // Add all document IDs for this file
-      const newSelection = [...selectedDocumentIds, ...file.documentIds];
+      // Add all document IDs for this file, ensuring uniqueness
+      const newSelection = Array.from(
+        new Set([...selectedDocumentIds, ...file.documentIds])
+      );
       onSelectionChange(newSelection);
     }
   };
 
   const handleSelectAll = () => {
-    const allDocumentIds = filteredFiles.flatMap((file) => file.documentIds);
+    const allDocumentIds = Array.from(
+      new Set(filteredFiles.flatMap((file) => file.documentIds))
+    );
     onSelectionChange(allDocumentIds);
   };
 

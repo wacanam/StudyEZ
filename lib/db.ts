@@ -132,13 +132,15 @@ export async function searchSimilarDocuments(
 }
 
 /**
- * Validate that document IDs belong to the specified user
- * Returns array of valid document IDs that exist and belong to the user
+ * Validate that document IDs belong to the specified user.
+ * Returns an object containing arrays of valid and invalid document IDs.
+ * Valid IDs are those that exist and belong to the user; invalid IDs are those that do not exist or belong to another user.
+ * This allows the caller to provide feedback on which documents were unauthorized or non-existent.
  */
 export async function validateDocumentOwnership(
   documentIds: number[],
   userId: string
-): Promise<number[]> {
+): Promise<{ valid: number[]; invalid: number[] }> {
   const db = getPrisma();
 
   const validDocuments = await db.document.findMany({
@@ -151,7 +153,10 @@ export async function validateDocumentOwnership(
     },
   });
 
-  return validDocuments.map((doc) => doc.id);
+  const validIds = validDocuments.map((doc) => doc.id);
+  const invalidIds = documentIds.filter((id) => !validIds.includes(id));
+
+  return { valid: validIds, invalid: invalidIds };
 }
 
 /**
