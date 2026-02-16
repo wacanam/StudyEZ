@@ -55,3 +55,48 @@ export function sourcesFromJson(json: Prisma.JsonValue): SourceDocument[] {
   }
   return [];
 }
+
+/**
+ * Query request payload with optional document ID filtering
+ */
+export interface QueryRequest {
+  query: string;
+  sessionId?: number;
+  documentIds?: number[];
+}
+
+/**
+ * Type guard to validate QueryRequest
+ */
+export function isQueryRequest(obj: unknown): obj is QueryRequest {
+  if (typeof obj !== 'object' || obj === null) {
+    return false;
+  }
+  
+  const request = obj as Record<string, unknown>;
+  
+  // query is required and must be string
+  if (typeof request.query !== 'string') {
+    return false;
+  }
+  
+  // sessionId is optional but must be number if present
+  if (request.sessionId !== undefined && typeof request.sessionId !== 'number') {
+    return false;
+  }
+  
+  // documentIds is optional but must be array of numbers if present
+  if (request.documentIds !== undefined) {
+    if (!Array.isArray(request.documentIds)) {
+      return false;
+    }
+    // Check each element is a number - early exit on first non-number
+    for (const id of request.documentIds) {
+      if (typeof id !== 'number') {
+        return false;
+      }
+    }
+  }
+  
+  return true;
+}
